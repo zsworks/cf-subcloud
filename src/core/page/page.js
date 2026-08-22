@@ -596,7 +596,7 @@ export async function getFakePage(e) {
 
         document.getElementById('copyToastBtn')?.addEventListener('click', () => window.copyToClipboard());
 
-        function generateConfigForMode(modeId) {
+        async function generateConfigForMode(modeId) {
             const container = document.getElementById(\`panel-\${modeId}\`);
             if (!container) return;
             const linkInputs = container.querySelectorAll('.dynamic-link-input');
@@ -634,6 +634,32 @@ export async function getFakePage(e) {
                     params.set(key, value);
                 }
             }
+
+            // saveConfig 模式：参数 JSON 存入 R2，生成短链接
+            if (MODES_META[modeId]?.saveConfig) {
+                try {
+                    const resp = await fetch('/api/short', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(Object.fromEntries(params)),
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok || !data.success) {
+                        throw new Error(typeof data === 'string' ? data : data.error || '保存失败');
+                    }
+                    const shortUrl = \`\${origin}/s/\${data.code}\`;
+                    updateResultAndQR(shortUrl);
+                    navigator.clipboard.writeText(shortUrl).then(() => {
+                        showToast('✓ 短链接已生成并复制', 'success');
+                    }).catch(() => {
+                        showToast('✓ 短链接已生成', 'success');
+                    });
+                } catch (err) {
+                    showToast(\`✗ \${err.message}\`, 'error');
+                }
+                return;
+            }
+
             const fullUrl = \`\${origin}/?\${params.toString()}\`;
 
             updateResultAndQR(fullUrl);
@@ -824,7 +850,9 @@ export async function getFakePage(e) {
 
             const genBtn = document.createElement('button');
             genBtn.className = 'generate-btn';
-            genBtn.innerText = \`✨ 生成 \${meta.name} 订阅链接\`;
+            genBtn.innerText = meta.saveConfig
+                ? \`💾 保存 \${meta.name} 订阅链接\`
+                : \`✨ 生成 \${meta.name} 订阅链接\`;
             genBtn.onclick = () => generateConfigForMode(modeId);
             panel.appendChild(genBtn);
 

@@ -6,3 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [assets]
 directory = "./template"
 binding = "ASSETS"
+
+[[r2_buckets]]
+binding = "SHORT_LINK"
+bucket_name = "cf-subcloud-links"
