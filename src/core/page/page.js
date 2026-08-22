@@ -356,6 +356,110 @@ export async function getFakePage(e) {
             white-space: nowrap;
         }
 
+        /* 已保存订阅列表 */
+        .saved-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .saved-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 10px 14px;
+            background: rgba(99, 102, 241, 0.06);
+            border: 1px solid var(--border-light);
+            border-radius: 0.9rem;
+            flex-wrap: wrap;
+        }
+
+        .saved-item.editing {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.12);
+        }
+
+        .saved-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 0.82rem;
+            color: var(--text-dark);
+            min-width: 0;
+        }
+
+        .saved-mode {
+            background: var(--primary);
+            color: #fff;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .saved-code {
+            font-family: monospace;
+            color: var(--primary-dark);
+            font-size: 0.8rem;
+        }
+
+        .saved-meta {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .saved-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .saved-btn {
+            border: 1px solid var(--primary-soft);
+            color: var(--primary-dark);
+            border-radius: 999px;
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            white-space: nowrap;
+        }
+
+        .saved-btn:hover {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .saved-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            margin-top: 0.9rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .saved-page-btn {
+            color: var(--primary-dark);
+            cursor: pointer;
+            user-select: none;
+            padding: 2px 8px;
+        }
+
+        .saved-page-btn:hover {
+            text-decoration: underline;
+        }
+
+        .saved-page-btn.disabled {
+            color: var(--border-light);
+            cursor: default;
+            text-decoration: none;
+        }
+
         .copy-hint {
             cursor: pointer;
             background: rgba(99, 102, 241, 0.08);
@@ -522,6 +626,17 @@ export async function getFakePage(e) {
             <div class="badge">多合一订阅</div>
         </div>
 
+        <!-- 已保存订阅列表 -->
+        <div class="form-card" id="savedCard">
+            <div class="section-title">📚 已保存订阅</div>
+            <div id="savedList" class="saved-list"></div>
+            <div class="saved-pagination">
+                <span class="saved-page-btn" id="savedPrev">‹ 上一页</span>
+                <span id="savedPageNum">1</span>
+                <span class="saved-page-btn" id="savedNext">下一页 ›</span>
+            </div>
+        </div>
+
         <!-- 模式选择器 - 与模板选择器样式一致 -->
         <div class="form-card">
             <div class="section-title">📱 选择客户端类型</div>
@@ -596,6 +711,140 @@ export async function getFakePage(e) {
 
         document.getElementById('copyToastBtn')?.addEventListener('click', () => window.copyToClipboard());
 
+        // ===== 已保存订阅列表 =====
+        let editingCode = null;
+        const savedPager = { index: 0, cursors: [null], nextCursor: null, hasMore: false };
+
+        async function loadSavedList(cursor) {
+            try {
+                const resp = await fetch(cursor ? \`/api/short/list?cursor=\${encodeURIComponent(cursor)}\` : '/api/short/list');
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error);
+                savedPager.nextCursor = data.nextCursor;
+                savedPager.hasMore = data.hasMore;
+                renderSavedList(data.items || []);
+                updateSavedPagerUI();
+            } catch (err) {
+                document.getElementById('savedCard').style.display = 'none';
+            }
+        }
+
+        function updateSavedPagerUI() {
+            const pageNum = document.getElementById('savedPageNum');
+            const prev = document.getElementById('savedPrev');
+            const next = document.getElementById('savedNext');
+            if (pageNum) pageNum.innerText = savedPager.index + 1;
+            if (prev) prev.classList.toggle('disabled', savedPager.index === 0);
+            if (next) next.classList.toggle('disabled', !savedPager.hasMore);
+        }
+
+        function renderSavedList(items) {
+            const box = document.getElementById('savedList');
+            if (!box) return;
+            box.innerHTML = '';
+            if (!items.length) {
+                box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">暂无保存的订阅</div>';
+                return;
+            }
+            const origin = window.location.origin;
+            items.forEach((item) => {
+                const row = document.createElement('div');
+                row.className = 'saved-item';
+                if (item.code === editingCode) row.classList.add('editing');
+                const modeName = MODES_META[item.target]?.name || item.target;
+                const urls = String(item.params.url || '').split(',').filter(Boolean);
+                const date = item.created
+                    ? new Date(item.created).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    : '';
+                const info = document.createElement('div');
+                info.className = 'saved-info';
+                info.innerHTML = \`<span class="saved-mode">\${modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${urls.length}条链接 · \${date}</span>\`;
+                const actions = document.createElement('div');
+                actions.className = 'saved-actions';
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'saved-btn';
+                copyBtn.innerText = '复制';
+                copyBtn.onclick = () => {
+                    navigator.clipboard.writeText(\`\${origin}/s/\${item.code}\`).then(() => {
+                        showToast('✓ 短链接已复制', 'success');
+                    }).catch(() => showToast('✗ 复制失败', 'error'));
+                };
+                const editBtn = document.createElement('button');
+                editBtn.className = 'saved-btn';
+                editBtn.innerText = '修改';
+                editBtn.onclick = () => {
+                    fillFormFromParams(item.params);
+                    editingCode = item.code;
+                    document.querySelectorAll('.saved-item').forEach((r) => r.classList.remove('editing'));
+                    row.classList.add('editing');
+                    showToast('✓ 已载入，保存将更新该短链接', 'success');
+                };
+                actions.append(copyBtn, editBtn);
+                row.append(info, actions);
+                box.appendChild(row);
+            });
+        }
+
+        function turnSavedPage(dir) {
+            if (dir > 0) {
+                if (!savedPager.hasMore) return;
+                savedPager.index++;
+                const cursor = savedPager.cursors[savedPager.index] !== undefined ? savedPager.cursors[savedPager.index] : savedPager.nextCursor;
+                if (savedPager.cursors.length <= savedPager.index) savedPager.cursors.push(cursor);
+                loadSavedList(cursor);
+            } else {
+                if (savedPager.index === 0) return;
+                savedPager.index--;
+                loadSavedList(savedPager.cursors[savedPager.index]);
+            }
+        }
+
+        // 将保存的参数回填到表单
+        function fillFormFromParams(params) {
+            const modeId = params.target;
+            if (!MODES_META[modeId]) return;
+            const modeOpt = document.querySelector(\`#modeDropdown .template-opt[data-mode-id="\${modeId}"]\`);
+            if (modeOpt) modeOpt.click();
+
+            const wrapper = document.getElementById(\`links-wrapper-\${modeId}\`);
+            if (wrapper) {
+                wrapper.innerHTML = '';
+                const urls = String(params.url || '').split(',').filter(Boolean);
+                urls.forEach(() => addLinkRow(\`links-wrapper-\${modeId}\`, modeId));
+                const inputs = wrapper.querySelectorAll('.dynamic-link-input');
+                urls.forEach((u, i) => {
+                    if (inputs[i]) inputs[i].value = u;
+                });
+            }
+
+            const container = document.getElementById(\`panel-\${modeId}\`);
+            if (!container) return;
+
+            container.querySelectorAll('.template-opt').forEach((o) => o.classList.remove('selected'));
+            const label = document.getElementById(\`selectedLabel-\${modeId}\`);
+            if (params.template && label) {
+                const opt = container.querySelector(\`.template-opt[data-value="\${CSS.escape(params.template)}"]\`);
+                if (opt) {
+                    opt.classList.add('selected');
+                    label.innerText = opt.innerText;
+                } else {
+                    label.innerText = '未匹配模板';
+                }
+            } else if (label) {
+                label.innerText = '未选择 (默认)';
+            }
+
+            container.querySelectorAll('.proto-check').forEach((cb) => {
+                cb.checked = params[cb.value] === 'true';
+            });
+            container.querySelectorAll('.proto-select').forEach((sel) => {
+                sel.value = params[sel.getAttribute('data-proto')] || '';
+            });
+        }
+
+        document.getElementById('savedPrev')?.addEventListener('click', () => turnSavedPage(-1));
+        document.getElementById('savedNext')?.addEventListener('click', () => turnSavedPage(1));
+
         async function generateConfigForMode(modeId) {
             const container = document.getElementById(\`panel-\${modeId}\`);
             if (!container) return;
@@ -641,12 +890,14 @@ export async function getFakePage(e) {
                     const resp = await fetch('/api/short', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(Object.fromEntries(params)),
+                        body: JSON.stringify({ ...Object.fromEntries(params), ...(editingCode ? { code: editingCode } : {}) }),
                     });
                     const data = await resp.json();
                     if (!resp.ok || !data.success) {
                         throw new Error(typeof data === 'string' ? data : data.error || '保存失败');
                     }
+                    editingCode = data.code;
+                    loadSavedList(savedPager.cursors[savedPager.index]);
                     const shortUrl = \`\${origin}/s/\${data.code}\`;
                     updateResultAndQR(shortUrl);
                     navigator.clipboard.writeText(shortUrl).then(() => {
@@ -926,6 +1177,7 @@ export async function getFakePage(e) {
 
             function setActiveMode(modeId) {
                 currentMode = modeId;
+                editingCode = null;
                 document.querySelectorAll('.mode-panel').forEach(panel => {
                     panel.classList.toggle('active', panel.id === \`panel-\${modeId}\`);
                 });
@@ -936,6 +1188,7 @@ export async function getFakePage(e) {
         }
 
         initApp();
+        loadSavedList();
     </script>
 </body>
 
