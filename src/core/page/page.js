@@ -460,6 +460,10 @@ export async function getFakePage(e) {
             text-decoration: none;
         }
 
+        #keyToggle:hover {
+            color: var(--primary-dark);
+        }
+
         .copy-hint {
             cursor: pointer;
             background: rgba(99, 102, 241, 0.08);
@@ -672,7 +676,7 @@ export async function getFakePage(e) {
             <input type="password" id="keyDialogInput" placeholder="请输入密钥"
                 style="width: 100%; padding: 10px 40px 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center;" />
             <span id="keyToggle" title="显示/隐藏密钥"
-                style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 1rem; user-select: none; opacity: 0.7;">👁️</span>
+                style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; width: 18px; height: 18px; color: #94a3b8; display: flex; align-items: center; justify-content: center;"></span>
         </div>
         <input type="text" id="keyDialogLabel" placeholder="备注（可选，加密存储）"
             style="display: none; width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
@@ -733,6 +737,16 @@ export async function getFakePage(e) {
         document.getElementById('copyToastBtn')?.addEventListener('click', () => window.copyToClipboard());
 
         // ===== 密钥弹窗（保存时可附带备注） =====
+        const EYE_ICON =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>';
+        const EYE_OFF_ICON =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>';
+
+        function setKeyToggle(shown) {
+            const toggle = document.getElementById('keyToggle');
+            if (toggle) toggle.innerHTML = shown ? EYE_OFF_ICON : EYE_ICON;
+        }
+
         function askKey(message, btnText = '确定', opts = {}) {
             return new Promise((resolve) => {
                 const dlg = document.getElementById('keyDialog');
@@ -745,8 +759,7 @@ export async function getFakePage(e) {
                 ok.innerText = btnText;
                 input.value = '';
                 input.type = 'password';
-                const keyToggle = document.getElementById('keyToggle');
-                if (keyToggle) keyToggle.innerText = '👁️';
+                setKeyToggle(false);
                 labelInput.style.display = opts.withLabel ? 'block' : 'none';
                 labelInput.value = opts.labelValue || '';
                 let settled = false;
@@ -842,12 +855,12 @@ export async function getFakePage(e) {
         // 密钥输入框显示/隐藏切换
         document.getElementById('keyToggle')?.addEventListener('click', () => {
             const input = document.getElementById('keyDialogInput');
-            const toggle = document.getElementById('keyToggle');
             const show = input.type === 'password';
             input.type = show ? 'text' : 'password';
-            toggle.innerText = show ? '🙈' : '👁️';
+            setKeyToggle(show);
             input.focus();
         });
+        setKeyToggle(false);
 
         // ===== 已保存订阅列表 =====
         let editingCode = null;
