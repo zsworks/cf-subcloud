@@ -2,13 +2,11 @@ export default function configs(tplmh = null, tplsb = null) {
     const data = {
         mihomo: {
             name: 'Clash(mihomo)',
-            saveConfig: true,
             placeholder: 'https:// 订阅链接或单节点链接',
             tipMarkdown: `
 ## mihomo 特性
 
 - 支持订阅/单节点合并，转换后端 [sub-store-node](https://github.com/Kwisma/Sub-Store-node.git)
-- 保存订阅链接: 配置存入 R2，生成 /s/{短码} 短链接（本站持久化）
 - 面板: http://127.0.0.1:9090/ui/xd
 - mixed(http+socks)端口: 7890，去广告 + 防DNS泄漏
 - **附加参数说明**  
