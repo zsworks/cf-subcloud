@@ -189,9 +189,11 @@ export async function handleShortLink(request, env) {
         await ensureTable(db);
         const row = await db.prepare('SELECT salt, blob FROM short_links WHERE code = ?').bind(match[1]).first();
         if (!row) return jsonResponse({ success: false, error: '短链接不存在' }, 404);
-        const key = url.searchParams.get('key');
-        if (!key) return jsonResponse({ success: false, error: '该订阅内容已加密，请在短链接后附加 ?key=解密密钥' }, 400);
+        const keyParam = url.searchParams.get('key');
+        if (!keyParam) return jsonResponse({ success: false, error: '该订阅内容已加密，请在短链接后附加 ?key=解密密钥' }, 400);
         try {
+            // key 为密钥的 base64 编码（URL 传输中 + 会被解码为空格，需还原）
+            const key = new TextDecoder().decode(base64ToBytes(keyParam.replace(/ /g, '+')));
             const obj = await decryptBlob(row.blob, key, row.salt);
             const headers = new Headers(obj.textHeaders || {});
             if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json; charset=utf-8');

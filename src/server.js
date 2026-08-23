@@ -2419,9 +2419,9 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=lP.generate
     <dialog id="keyDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; max-width: 22rem; box-shadow: var(--shadow-md);">
         <p id="keyDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
         <input type="password" id="keyDialogInput" placeholder="\u8BF7\u8F93\u5165\u5BC6\u94A5"
-            style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem;" />
+            style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
         <input type="text" id="keyDialogLabel" placeholder="\u5907\u6CE8\uFF08\u53EF\u9009\uFF0C\u52A0\u5BC6\u5B58\u50A8\uFF09"
-            style="display: none; width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem;" />
+            style="display: none; width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
             <button id="keyDialogCancel"
                 style="border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">\u53D6\u6D88</button>
@@ -2524,6 +2524,11 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=lP.generate
         const PBKDF2_ITERATIONS = 100000;
         const IV_LENGTH = 12;
 
+        // \u5BC6\u94A5\u7684 base64 \u7F16\u7801\uFF08UTF-8 \u5B89\u5168\uFF09\uFF0C\u7528\u4E8E\u77ED\u94FE\u63A5 ?key= \u53C2\u6570
+        function b64EncodeKey(str) {
+            return btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+        }
+
         async function decryptBlobClient(blobB64, passphrase, saltB64) {
             const bytesFromB64 = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
             const salt = bytesFromB64(saltB64);
@@ -2563,7 +2568,7 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=lP.generate
                 editingCode = data.code;
                 editingLabel = label || '';
                 loadSavedList(savedPager.page);
-                const shortUrl = \`\${window.location.origin}/s/\${data.code}?key=\${encodeURIComponent(key)}\`;
+                const shortUrl = \`\${window.location.origin}/s/\${data.code}?key=\${b64EncodeKey(key)}\`;
                 updateResultAndQR(shortUrl);
                 navigator.clipboard.writeText(shortUrl).then(() => {
                     showToast('\u2713 \u5DF2\u52A0\u5BC6\u4FDD\u5B58\uFF0C\u77ED\u94FE\u63A5\uFF08\u542B\u89E3\u5BC6\u5BC6\u94A5\uFF09\u5DF2\u590D\u5236', 'success');
@@ -2663,7 +2668,7 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=lP.generate
                         const unlocked2 = await unlockEntry(item.code, '\u8BE5\u8BA2\u9605\u5185\u5BB9\u5DF2\u52A0\u5BC6\uFF0C\u8BF7\u8F93\u5165\u89E3\u5BC6\u5BC6\u94A5\u4EE5\u751F\u6210\u53EF\u7528\u7684\u77ED\u94FE\u63A5\u3002', '\u590D\u5236');
                         if (!unlocked2) return;
                         renderSavedList(currentSavedItems);
-                        const link = \`\${origin}/s/\${item.code}?key=\${encodeURIComponent(unlocked2.key)}\`;
+                        const link = \`\${origin}/s/\${item.code}?key=\${b64EncodeKey(unlocked2.key)}\`;
                         await navigator.clipboard.writeText(link);
                         showToast('\u2713 \u77ED\u94FE\u63A5\u5DF2\u590D\u5236', 'success');
                     } catch {

@@ -669,9 +669,9 @@ export async function getFakePage(e) {
     <dialog id="keyDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; max-width: 22rem; box-shadow: var(--shadow-md);">
         <p id="keyDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
         <input type="password" id="keyDialogInput" placeholder="请输入密钥"
-            style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem;" />
+            style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
         <input type="text" id="keyDialogLabel" placeholder="备注（可选，加密存储）"
-            style="display: none; width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem;" />
+            style="display: none; width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
             <button id="keyDialogCancel"
                 style="border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">取消</button>
@@ -774,6 +774,11 @@ export async function getFakePage(e) {
         const PBKDF2_ITERATIONS = 100000;
         const IV_LENGTH = 12;
 
+        // 密钥的 base64 编码（UTF-8 安全），用于短链接 ?key= 参数
+        function b64EncodeKey(str) {
+            return btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+        }
+
         async function decryptBlobClient(blobB64, passphrase, saltB64) {
             const bytesFromB64 = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
             const salt = bytesFromB64(saltB64);
@@ -813,7 +818,7 @@ export async function getFakePage(e) {
                 editingCode = data.code;
                 editingLabel = label || '';
                 loadSavedList(savedPager.page);
-                const shortUrl = \`\${window.location.origin}/s/\${data.code}?key=\${encodeURIComponent(key)}\`;
+                const shortUrl = \`\${window.location.origin}/s/\${data.code}?key=\${b64EncodeKey(key)}\`;
                 updateResultAndQR(shortUrl);
                 navigator.clipboard.writeText(shortUrl).then(() => {
                     showToast('✓ 已加密保存，短链接（含解密密钥）已复制', 'success');
@@ -913,7 +918,7 @@ export async function getFakePage(e) {
                         const unlocked2 = await unlockEntry(item.code, '该订阅内容已加密，请输入解密密钥以生成可用的短链接。', '复制');
                         if (!unlocked2) return;
                         renderSavedList(currentSavedItems);
-                        const link = \`\${origin}/s/\${item.code}?key=\${encodeURIComponent(unlocked2.key)}\`;
+                        const link = \`\${origin}/s/\${item.code}?key=\${b64EncodeKey(unlocked2.key)}\`;
                         await navigator.clipboard.writeText(link);
                         showToast('✓ 短链接已复制', 'success');
                     } catch {
