@@ -433,34 +433,6 @@ export async function getFakePage(e) {
             color: #fff;
         }
 
-        .saved-encrypted {
-            background: #f59e0b;
-            color: #fff;
-            padding: 1px 8px;
-            border-radius: 999px;
-            font-size: 0.68rem;
-            white-space: nowrap;
-        }
-
-        .saved-cached {
-            background: var(--success);
-            color: #fff;
-            padding: 1px 8px;
-            border-radius: 999px;
-            font-size: 0.68rem;
-            white-space: nowrap;
-        }
-
-        .saved-btn-danger {
-            border-color: #fca5a5;
-            color: var(--error);
-        }
-
-        .saved-btn-danger:hover {
-            background: var(--error);
-            color: #fff;
-        }
-
         .saved-pagination {
             display: flex;
             align-items: center;
@@ -698,6 +670,8 @@ export async function getFakePage(e) {
         <p id="keyDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
         <input type="password" id="keyDialogInput" placeholder="请输入密钥"
             style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem;" />
+        <input type="text" id="keyDialogLabel" placeholder="备注（可选，加密存储）"
+            style="display: none; width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem;" />
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
             <button id="keyDialogCancel"
                 style="border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">取消</button>
@@ -754,17 +728,20 @@ export async function getFakePage(e) {
 
         document.getElementById('copyToastBtn')?.addEventListener('click', () => window.copyToClipboard());
 
-        // ===== 密钥弹窗 =====
-        function askKey(message, btnText = '确定') {
+        // ===== 密钥弹窗（保存时可附带备注） =====
+        function askKey(message, btnText = '确定', opts = {}) {
             return new Promise((resolve) => {
                 const dlg = document.getElementById('keyDialog');
                 const msg = document.getElementById('keyDialogMsg');
                 const input = document.getElementById('keyDialogInput');
+                const labelInput = document.getElementById('keyDialogLabel');
                 const ok = document.getElementById('keyDialogOk');
                 const cancel = document.getElementById('keyDialogCancel');
                 msg.innerText = message;
                 ok.innerText = btnText;
                 input.value = '';
+                labelInput.style.display = opts.withLabel ? 'block' : 'none';
+                labelInput.value = opts.labelValue || '';
                 let settled = false;
                 const done = (val) => {
                     if (settled) return;
@@ -776,15 +753,36 @@ export async function getFakePage(e) {
                     dlg.close();
                     resolve(val);
                 };
-                ok.onclick = () => done(input.value.trim() || null);
+                ok.onclick = () => {
+                    const key = input.value.trim() || null;
+                    done(key ? { key, label: labelInput.value.trim() } : null);
+                };
                 cancel.onclick = () => done(null);
                 dlg.onclose = () => done(null);
                 input.onkeydown = (ev) => {
-                    if (ev.key === 'Enter') done(input.value.trim() || null);
+                    if (ev.key === 'Enter') {
+                        const key = input.value.trim() || null;
+                        done(key ? { key, label: labelInput.value.trim() } : null);
+                    }
                 };
                 dlg.showModal();
                 setTimeout(() => input.focus(), 50);
             });
+        }
+
+        // ===== 客户端解密（与后端 shortlink.js 算法一致：PBKDF2 + AES-GCM） =====
+        const PBKDF2_ITERATIONS = 100000;
+        const IV_LENGTH = 12;
+
+        async function decryptBlobClient(blobB64, passphrase, saltB64) {
+            const bytesFromB64 = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+            const salt = bytesFromB64(saltB64);
+            const combined = bytesFromB64(blobB64);
+            const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveBits']);
+            const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, keyMaterial, 256);
+            const key = await crypto.subtle.importKey('raw', bits, 'AES-GCM', false, ['decrypt']);
+            const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: combined.subarray(0, IV_LENGTH) }, key, combined.subarray(IV_LENGTH));
+            return JSON.parse(new TextDecoder().decode(plain));
         }
 
         // ===== 保存订阅内容（加密） =====
@@ -794,20 +792,26 @@ export async function getFakePage(e) {
                 showToast('✗ 请先生成订阅链接', 'error');
                 return;
             }
-            const key = await askKey('保存订阅内容会将转换后的内容加密保存在服务器上，请输入加密密钥。密钥不会存储在服务器上，忘记后将无法解密。', '保存');
+            const res = (await askKey(
+                '保存订阅内容会将转换后的内容加密保存在服务器上，请输入加密密钥。密钥不会存储在服务器上，忘记后将无法解密。',
+                '保存',
+                { withLabel: true, labelValue: editingLabel }
+            )) || {};
+            const { key, label } = res;
             if (!key) return;
             try {
                 showToast('⏳ 正在生成并加密订阅内容…', 'success');
                 const resp = await fetch('/api/short', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: sourceUrl, key, ...(editingCode ? { code: editingCode } : {}) }),
+                    body: JSON.stringify({ url: sourceUrl, key, label: label || '', ...(editingCode ? { code: editingCode } : {}) }),
                 });
                 const data = await resp.json();
                 if (!resp.ok || !data.success) {
                     throw new Error(typeof data === 'string' ? data : data.error || '保存失败');
                 }
                 editingCode = data.code;
+                editingLabel = label || '';
                 loadSavedList(savedPager.page);
                 const shortUrl = \`\${window.location.origin}/s/\${data.code}?key=\${encodeURIComponent(key)}\`;
                 updateResultAndQR(shortUrl);
@@ -825,7 +829,11 @@ export async function getFakePage(e) {
 
         // ===== 已保存订阅列表 =====
         let editingCode = null;
+        let editingLabel = '';
         const savedPager = { page: 1, totalPages: 1 };
+        // 已在本地解密的条目信息（code -> blob 解密结果），用于列表展示 label 等信息
+        const unlockedInfo = new Map();
+        let currentSavedItems = [];
 
         async function loadSavedList(page = 1) {
             try {
@@ -834,7 +842,8 @@ export async function getFakePage(e) {
                 if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error);
                 savedPager.page = data.page;
                 savedPager.totalPages = data.totalPages;
-                renderSavedList(data.items || []);
+                currentSavedItems = data.items || [];
+                renderSavedList(currentSavedItems);
                 updateSavedPagerUI();
             } catch (err) {
                 document.getElementById('savedCard').style.display = 'none';
@@ -856,6 +865,17 @@ export async function getFakePage(e) {
             loadSavedList(target);
         }
 
+        // 取回单条密文并在本地解密
+        async function unlockEntry(code, message, btnText) {
+            const { key } = (await askKey(message, btnText)) || {};
+            if (!key) return null;
+            const resp = await fetch(\`/api/short/get?code=\${code}\`).then((x) => x.json());
+            if (!resp.success) throw new Error(typeof resp === 'string' ? resp : resp.error || '获取失败');
+            const obj = await decryptBlobClient(resp.blob, key, resp.salt);
+            unlockedInfo.set(code, obj);
+            return { key, obj };
+        }
+
         function renderSavedList(items) {
             const box = document.getElementById('savedList');
             if (!box) return;
@@ -869,14 +889,20 @@ export async function getFakePage(e) {
                 const row = document.createElement('div');
                 row.className = 'saved-item';
                 if (item.code === editingCode) row.classList.add('editing');
-                const modeName = MODES_META[item.target]?.name || item.target;
-                const urls = String(item.params.url || '').split(',').filter(Boolean);
                 const date = item.created
                     ? new Date(item.created).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
                     : '';
+                // 服务端仅存短码与时间；已解锁条目展示本地解密出的 label/模式/链接数
+                const unlocked = unlockedInfo.get(item.code);
                 const info = document.createElement('div');
                 info.className = 'saved-info';
-                info.innerHTML = \`<span class="saved-mode">\${modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${urls.length}条链接 · \${date}</span>\${item.encrypted ? '<span class="saved-encrypted">🔒 已加密</span>' : item.cached ? '<span class="saved-cached">📦 已缓存</span>' : ''}\`;
+                if (unlocked) {
+                    const modeName = MODES_META[unlocked.target]?.name || unlocked.target;
+                    const urls = String(unlocked.params?.url || '').split(',').filter(Boolean);
+                    info.innerHTML = \`<span class="saved-mode">\${unlocked.label || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} · \${urls.length}条链接 · \${date}</span>\`;
+                } else {
+                    info.innerHTML = \`<span class="saved-code">🔒 /s/\${item.code}</span><span class="saved-meta">\${date} · 输入密钥后显示详情</span>\`;
+                }
                 const actions = document.createElement('div');
                 actions.className = 'saved-actions';
                 const copyBtn = document.createElement('button');
@@ -884,52 +910,33 @@ export async function getFakePage(e) {
                 copyBtn.innerText = '复制';
                 copyBtn.onclick = async () => {
                     try {
-                        let key = null;
-                        if (item.encrypted) {
-                            key = await askKey('该订阅内容已加密，请输入解密密钥以生成可用的短链接。', '复制');
-                            if (!key) return;
-                        }
-                        const link = \`\${origin}/s/\${item.code}\${key ? \`?key=\${encodeURIComponent(key)}\` : ''}\`;
+                        const unlocked2 = await unlockEntry(item.code, '该订阅内容已加密，请输入解密密钥以生成可用的短链接。', '复制');
+                        if (!unlocked2) return;
+                        renderSavedList(currentSavedItems);
+                        const link = \`\${origin}/s/\${item.code}?key=\${encodeURIComponent(unlocked2.key)}\`;
                         await navigator.clipboard.writeText(link);
                         showToast('✓ 短链接已复制', 'success');
                     } catch {
-                        showToast('✗ 复制失败', 'error');
+                        showToast('✗ 解密密钥错误', 'error');
                     }
                 };
                 const editBtn = document.createElement('button');
                 editBtn.className = 'saved-btn';
                 editBtn.innerText = '修改';
-                editBtn.onclick = () => {
-                    fillFormFromParams(item.params);
-                    editingCode = item.code;
-                    document.querySelectorAll('.saved-item').forEach((r) => r.classList.remove('editing'));
-                    row.classList.add('editing');
-                    showToast('✓ 已载入，保存将更新该短链接', 'success');
-                };
-                const clearBtn = document.createElement('button');
-                clearBtn.className = 'saved-btn saved-btn-danger';
-                clearBtn.innerText = '清除';
-                clearBtn.onclick = async () => {
+                editBtn.onclick = async () => {
                     try {
-                        const resp = await fetch('/api/short/clear', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ code: item.code }),
-                        });
-                        const data = await resp.json();
-                        if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error || '清除失败');
-                        showToast('✓ 已清除订阅内容，下次访问将重新生成', 'success');
-                        loadSavedList(savedPager.page);
-                    } catch (err) {
-                        showToast(\`✗ \${err.message}\`, 'error');
+                        const unlocked2 = await unlockEntry(item.code, '请输入解密密钥以载入该订阅的配置。', '载入');
+                        if (!unlocked2) return;
+                        fillFormFromParams(unlocked2.obj.params);
+                        editingCode = item.code;
+                        editingLabel = unlocked2.obj.label || '';
+                        renderSavedList(currentSavedItems);
+                        showToast('✓ 已载入，保存将更新该短链接', 'success');
+                    } catch {
+                        showToast('✗ 解密密钥错误', 'error');
                     }
                 };
-                // 加密条目的密文即内容本身，不支持清除缓存
-                if (item.encrypted) {
-                    actions.append(copyBtn, editBtn);
-                } else {
-                    actions.append(copyBtn, editBtn, clearBtn);
-                }
+                actions.append(copyBtn, editBtn);
                 row.append(info, actions);
                 box.appendChild(row);
             });
@@ -1285,6 +1292,7 @@ export async function getFakePage(e) {
             function setActiveMode(modeId) {
                 currentMode = modeId;
                 editingCode = null;
+                editingLabel = '';
                 document.querySelectorAll('.mode-panel').forEach(panel => {
                     panel.classList.toggle('active', panel.id === \`panel-\${modeId}\`);
                 });
