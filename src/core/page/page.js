@@ -433,6 +433,25 @@ export async function getFakePage(e) {
             color: #fff;
         }
 
+        .saved-cached {
+            background: var(--success);
+            color: #fff;
+            padding: 1px 8px;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            white-space: nowrap;
+        }
+
+        .saved-btn-danger {
+            border-color: #fca5a5;
+            color: var(--error);
+        }
+
+        .saved-btn-danger:hover {
+            background: var(--error);
+            color: #fff;
+        }
+
         .saved-pagination {
             display: flex;
             align-items: center;
@@ -758,7 +777,7 @@ export async function getFakePage(e) {
                     : '';
                 const info = document.createElement('div');
                 info.className = 'saved-info';
-                info.innerHTML = \`<span class="saved-mode">\${modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${urls.length}条链接 · \${date}</span>\`;
+                info.innerHTML = \`<span class="saved-mode">\${modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${urls.length}条链接 · \${date}</span>\${item.cached ? '<span class="saved-cached">📦 已缓存</span>' : ''}\`;
                 const actions = document.createElement('div');
                 actions.className = 'saved-actions';
                 const copyBtn = document.createElement('button');
@@ -779,7 +798,25 @@ export async function getFakePage(e) {
                     row.classList.add('editing');
                     showToast('✓ 已载入，保存将更新该短链接', 'success');
                 };
-                actions.append(copyBtn, editBtn);
+                const clearBtn = document.createElement('button');
+                clearBtn.className = 'saved-btn saved-btn-danger';
+                clearBtn.innerText = '清除';
+                clearBtn.onclick = async () => {
+                    try {
+                        const resp = await fetch('/api/short/clear', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ code: item.code }),
+                        });
+                        const data = await resp.json();
+                        if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error || '清除失败');
+                        showToast('✓ 已清除订阅内容，下次访问将重新生成', 'success');
+                        loadSavedList(savedPager.cursors[savedPager.index]);
+                    } catch (err) {
+                        showToast(\`✗ \${err.message}\`, 'error');
+                    }
+                };
+                actions.append(copyBtn, editBtn, clearBtn);
                 row.append(info, actions);
                 box.appendChild(row);
             });

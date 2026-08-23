@@ -56,10 +56,23 @@ export async function handleShortLink(request, env) {
         for (const obj of listed.objects) {
             const data = await bucket.get(obj.key);
             if (!data) continue;
-            const { params, created } = await data.json();
-            items.push({ code: obj.key.slice(KEY_PREFIX.length), target: params.target, created, params });
+            const { params, created, text } = await data.json();
+            items.push({ code: obj.key.slice(KEY_PREFIX.length), target: params.target, created, params, cached: !!text });
         }
         return jsonResponse({ success: true, items, hasMore: listed.truncated, nextCursor: listed.cursor || null });
+    }
+
+    // 清除订阅内容：POST /api/short/clear，body {code}，删除 text 字段（下次访问重新生成）
+    if (request.method === 'POST' && path === '/api/short/clear') {
+        if (!bucket) throw new Error('短链接功能未启用：未绑定 R2 存储');
+        const { code } = await request.json();
+        if (!code || !/^[A-Za-z0-9]{4,16}$/.test(String(code))) throw new Error('无效的短码');
+        const obj = await bucket.get(KEY_PREFIX + code);
+        if (!obj) return jsonResponse({ success: false, error: '短链接不存在' }, 404);
+        const stored = await obj.json();
+        const { text, ...rest } = stored;
+        await bucket.put(KEY_PREFIX + code, JSON.stringify(rest), { httpMetadata: { contentType: 'application/json' } });
+        return jsonResponse({ success: true });
     }
 
     // 访问短链接：GET /s/{code}，从 R2 取回参数并走正常转换流程
@@ -68,12 +81,32 @@ export async function handleShortLink(request, env) {
         if (!bucket) throw new Error('短链接功能未启用：未绑定 R2 存储');
         const obj = await bucket.get(KEY_PREFIX + match[1]);
         if (!obj) return jsonResponse({ success: false, error: '短链接不存在' }, 404);
-        const { params } = await obj.json();
+        const stored = await obj.json();
+        const { params, text, textHeaders } = stored;
+
+        // R2 已有订阅信息则直接返回缓存
+        if (text) {
+            const headers = new Headers(textHeaders || {});
+            if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json; charset=utf-8');
+            return new Response(text, { status: 200, headers });
+        }
+
         const qs = new URLSearchParams(params).toString();
         const fullUrl = new URL(`/?${qs}`, url.origin);
         const newRequest = new Request(fullUrl, request);
         const e = buildConfig(newRequest, env, false);
         const result = await handleRequest(e);
+
+        // 生成成功时，把订阅信息与响应头写回 R2（下次访问直接使用缓存）
+        if ((result.status || 200) === 200) {
+            const generated = typeof result.body === 'string' ? result.body : JSON.stringify(result.body);
+            await bucket.put(
+                KEY_PREFIX + match[1],
+                JSON.stringify({ ...stored, text: generated, textHeaders: Object.fromEntries(new Headers(result.headers)) }),
+                { httpMetadata: { contentType: 'application/json' } },
+            );
+        }
+
         return new Response(result.body, {
             status: result.status,
             headers: result.headers,
