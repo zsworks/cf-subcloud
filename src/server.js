@@ -2418,8 +2418,12 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=lP.generate
 
     <dialog id="keyDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; box-shadow: var(--shadow-md); position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; width: min(22rem, calc(100vw - 3rem));">
         <p id="keyDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
-        <input type="password" id="keyDialogInput" placeholder="\u8BF7\u8F93\u5165\u5BC6\u94A5"
-            style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
+        <div style="position: relative; margin-bottom: 1.2rem;">
+            <input type="password" id="keyDialogInput" placeholder="\u8BF7\u8F93\u5165\u5BC6\u94A5"
+                style="width: 100%; padding: 10px 40px 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center;" />
+            <span id="keyToggle" title="\u663E\u793A/\u9690\u85CF\u5BC6\u94A5"
+                style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 1rem; user-select: none; opacity: 0.7;">\u{1F441}\uFE0F</span>
+        </div>
         <input type="text" id="keyDialogLabel" placeholder="\u5907\u6CE8\uFF08\u53EF\u9009\uFF0C\u52A0\u5BC6\u5B58\u50A8\uFF09"
             style="display: none; width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
@@ -2490,6 +2494,9 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=lP.generate
                 msg.innerText = message;
                 ok.innerText = btnText;
                 input.value = '';
+                input.type = 'password';
+                const keyToggle = document.getElementById('keyToggle');
+                if (keyToggle) keyToggle.innerText = '\u{1F441}\uFE0F';
                 labelInput.style.display = opts.withLabel ? 'block' : 'none';
                 labelInput.value = opts.labelValue || '';
                 let settled = false;
@@ -2581,6 +2588,16 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=lP.generate
         }
 
         document.getElementById('saveContentBtn')?.addEventListener('click', () => saveEncryptedContent());
+
+        // \u5BC6\u94A5\u8F93\u5165\u6846\u663E\u793A/\u9690\u85CF\u5207\u6362
+        document.getElementById('keyToggle')?.addEventListener('click', () => {
+            const input = document.getElementById('keyDialogInput');
+            const toggle = document.getElementById('keyToggle');
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            toggle.innerText = show ? '\u{1F648}' : '\u{1F441}\uFE0F';
+            input.focus();
+        });
 
         // ===== \u5DF2\u4FDD\u5B58\u8BA2\u9605\u5217\u8868 =====
         let editingCode = null;

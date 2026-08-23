@@ -668,8 +668,12 @@ export async function getFakePage(e) {
 
     <dialog id="keyDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; box-shadow: var(--shadow-md); position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; width: min(22rem, calc(100vw - 3rem));">
         <p id="keyDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
-        <input type="password" id="keyDialogInput" placeholder="请输入密钥"
-            style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
+        <div style="position: relative; margin-bottom: 1.2rem;">
+            <input type="password" id="keyDialogInput" placeholder="请输入密钥"
+                style="width: 100%; padding: 10px 40px 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center;" />
+            <span id="keyToggle" title="显示/隐藏密钥"
+                style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 1rem; user-select: none; opacity: 0.7;">👁️</span>
+        </div>
         <input type="text" id="keyDialogLabel" placeholder="备注（可选，加密存储）"
             style="display: none; width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
@@ -740,6 +744,9 @@ export async function getFakePage(e) {
                 msg.innerText = message;
                 ok.innerText = btnText;
                 input.value = '';
+                input.type = 'password';
+                const keyToggle = document.getElementById('keyToggle');
+                if (keyToggle) keyToggle.innerText = '👁️';
                 labelInput.style.display = opts.withLabel ? 'block' : 'none';
                 labelInput.value = opts.labelValue || '';
                 let settled = false;
@@ -831,6 +838,16 @@ export async function getFakePage(e) {
         }
 
         document.getElementById('saveContentBtn')?.addEventListener('click', () => saveEncryptedContent());
+
+        // 密钥输入框显示/隐藏切换
+        document.getElementById('keyToggle')?.addEventListener('click', () => {
+            const input = document.getElementById('keyDialogInput');
+            const toggle = document.getElementById('keyToggle');
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            toggle.innerText = show ? '🙈' : '👁️';
+            input.focus();
+        });
 
         // ===== 已保存订阅列表 =====
         let editingCode = null;
