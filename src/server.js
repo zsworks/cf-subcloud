@@ -2416,7 +2416,7 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=lP.generate
         </div>
     </div>
 
-    <dialog id="keyDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; max-width: 22rem; box-shadow: var(--shadow-md);">
+    <dialog id="keyDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; box-shadow: var(--shadow-md); position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; width: min(22rem, calc(100vw - 3rem));">
         <p id="keyDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
         <input type="password" id="keyDialogInput" placeholder="\u8BF7\u8F93\u5165\u5BC6\u94A5"
             style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
