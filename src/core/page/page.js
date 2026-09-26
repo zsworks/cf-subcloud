@@ -1,4 +1,9 @@
 import configs from './config.js';
+// 三个前端库自托管内联（原 jsdelivr CDN 在部分网络被阻断会导致整页脚本不执行）
+// 版本：qrcodejs-kx@1.0.2 / marked@12.0.2 / dompurify@3.0.5，更新见 vendor/README.md
+import qrcodeLib from './vendor/qrcode.min.js';
+import markedLib from './vendor/marked.min.js';
+import purifyLib from './vendor/purify.min.js';
 
 export async function getFakePage(e) {
     let configData = JSON.parse(configs(e.tplmh, e.tplsb));
@@ -23,11 +28,11 @@ export async function getFakePage(e) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <link rel="icon" type="image/png" href="https://cdn.jsdelivr.net/gh/Kwisma/cf-worker-mihomo@main/favicon.png">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
     <title>星尘配置转换 · 订阅转换</title>
-    <script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
+    <script>${qrcodeLib}</script>
+    <script>${markedLib}</script>
+    <script>${purifyLib}</script>
     <style>
         * {
             margin: 0;

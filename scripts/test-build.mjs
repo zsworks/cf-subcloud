@@ -19,6 +19,17 @@ const replaceOpenApiIsNode = {
     },
 };
 
+const vendorText = {
+    // 与 esbuild.js 保持一致：前端 vendor 库按文本引入，避免被当作模块执行（qrcode UMD 顶层访问 document）
+    name: 'vendor-text',
+    setup(build) {
+        build.onLoad({ filter: /[\\/]vendor[\\/].*\.min\.js$/ }, async (args) => {
+            if (!args.path.includes(path.join('src', 'core', 'page', 'vendor'))) return null;
+            return { contents: await fs.readFile(args.path, 'utf8'), loader: 'text' };
+        });
+    },
+};
+
 const files = readdirSync('test/shortlink')
     .filter((f) => f.endsWith('.test.mjs'))
     .map((f) => `test/shortlink/${f}`);
@@ -30,7 +41,7 @@ await build({
     format: 'cjs',
     outdir: '.test-dist',
     logLevel: 'warning',
-    plugins: [replaceOpenApiIsNode],
+    plugins: [replaceOpenApiIsNode, vendorText],
 });
 
 const outs = files.map((f) => `.test-dist/${f.split('/').pop().replace(/\.mjs$/, '.js')}`);

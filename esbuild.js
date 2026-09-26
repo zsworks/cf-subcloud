@@ -25,6 +25,21 @@ const replaceOpenApiIsNode = {
         );
     },
 };
+const vendorText = {
+    name: 'vendor-text',
+    setup(build) {
+        build.onLoad(
+            { filter: /[\\/]vendor[\\/].*\.min\.js$/ },
+            async (args) => {
+                if (!args.path.includes(path.join('src', 'core', 'page', 'vendor'))) return null;
+                return {
+                    contents: await fs.readFile(args.path, 'utf8'),
+                    loader: 'text',
+                };
+            },
+        );
+    },
+};
 !(async () => {
     const artifacts = [{ src: 'src/worker.js', dest: 'dist/_worker.js' }];
     for (const artifact of artifacts) {
@@ -37,7 +52,7 @@ const replaceOpenApiIsNode = {
             format: 'esm',
             outfile: artifact.dest,
             inject: [objectHasOwnPolyfill],
-            plugins: [replaceOpenApiIsNode],
+            plugins: [replaceOpenApiIsNode, vendorText],
         });
         console.log(`✔️ 打包完成: ${artifact.src} → ${artifact.dest}`);
     }
@@ -52,7 +67,7 @@ const replaceOpenApiIsNode = {
             format: 'cjs',
             outfile: artifact.dest,
             inject: [objectHasOwnPolyfill],
-            plugins: [replaceOpenApiIsNode],
+            plugins: [replaceOpenApiIsNode, vendorText],
         });
         console.log(`✔️ 打包完成: ${artifact.src} → ${artifact.dest}`);
     }
