@@ -2449,6 +2449,12 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=fP.generate
             </div>
         </div>
 
+        <!-- \u539F\u59CB\u8BA2\u9605\u5E93 -->
+        <div class="form-card" id="sourceCard">
+            <div class="section-title">\u{1F5C3}\uFE0F \u539F\u59CB\u8BA2\u9605\u5E93</div>
+            <div id="sourceList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
+
         <!-- \u6A21\u5F0F\u9009\u62E9\u5668 - \u4E0E\u6A21\u677F\u9009\u62E9\u5668\u6837\u5F0F\u4E00\u81F4 -->
         <div class="form-card">
             <div class="section-title">\u{1F4F1} \u9009\u62E9\u5BA2\u6237\u7AEF\u7C7B\u578B</div>
@@ -2879,6 +2885,76 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=fP.generate
 
         document.getElementById('savedPrev')?.addEventListener('click', () => turnSavedPage(-1));
         document.getElementById('savedNext')?.addEventListener('click', () => turnSavedPage(1));
+
+        // ===== \u539F\u59CB\u8BA2\u9605\u5E93\u7BA1\u7406 =====
+        async function loadSourceLibrary() {
+            const box = document.getElementById('sourceList');
+            if (!box) return;
+            try {
+                const resp = await fetch('/api/source/list');
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(data.error);
+                box.innerHTML = '';
+                const items = data.items || [];
+                if (!items.length) {
+                    box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">\u6682\u65E0\u539F\u59CB\u8BA2\u9605\uFF08\u5728\u8BA2\u9605\u94FE\u63A5\u884C\u70B9 \u{1F4BE} \u4FDD\u5B58\uFF09</div>';
+                    return;
+                }
+                items.forEach((s) => {
+                    const row = document.createElement('div');
+                    row.className = 'saved-item';
+                    const time = s.fetchedAt ? new Date(s.fetchedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                    const info = document.createElement('div');
+                    info.className = 'saved-info';
+                    info.innerHTML = \`<span class="saved-mode">\u{1F5C3}\uFE0F \${s.name}</span><span class="saved-meta">\${time} \u62C9\u53D6 \xB7 \u5185\u5BB9\u52A0\u5BC6\u5B58\u50A8</span>\`;
+                    const actions = document.createElement('div');
+                    actions.className = 'saved-actions';
+                    const refreshBtn = document.createElement('button');
+                    refreshBtn.className = 'saved-btn';
+                    refreshBtn.innerText = '\u5237\u65B0';
+                    refreshBtn.onclick = async () => {
+                        try {
+                            refreshBtn.disabled = true;
+                            const r = await fetch('/api/source/refresh', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: s.id }),
+                            }).then((x) => x.json());
+                            if (!r.success) throw new Error(r.error || '\u5237\u65B0\u5931\u8D25');
+                            showToast(\`\u2713 \u5DF2\u5237\u65B0\u300C\${s.name}\u300D\uFF0C\u76F8\u5173\u77ED\u94FE\u5C06\u81EA\u52A8\u91CD\u65B0\u751F\u6210\`, 'success');
+                            loadSourceLibrary();
+                        } catch (err) {
+                            showToast(\`\u2717 \${err.message}\`, 'error');
+                        } finally {
+                            refreshBtn.disabled = false;
+                        }
+                    };
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'saved-btn saved-btn-danger';
+                    delBtn.innerText = '\u5220\u9664';
+                    delBtn.onclick = async () => {
+                        if (!confirm(\`\u5220\u9664\u539F\u59CB\u8BA2\u9605\u300C\${s.name}\u300D\uFF1F\u5DF2\u751F\u6210\u7F13\u5B58\u7684\u77ED\u94FE\u4ECD\u53EF\u8BBF\u95EE\uFF0C\u4F46\u65E0\u6CD5\u91CD\u65B0\u751F\u6210\u3002\`)) return;
+                        try {
+                            const r = await fetch('/api/source/delete', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: s.id }),
+                            }).then((x) => x.json());
+                            if (!r.success) throw new Error(r.error || '\u5220\u9664\u5931\u8D25');
+                            showToast('\u2713 \u5DF2\u5220\u9664', 'success');
+                            loadSourceLibrary();
+                        } catch (err) {
+                            showToast(\`\u2717 \${err.message}\`, 'error');
+                        }
+                    };
+                    actions.append(refreshBtn, delBtn);
+                    row.append(info, actions);
+                    box.appendChild(row);
+                });
+            } catch (err) {
+                box.innerHTML = \`<div style="color: var(--text-muted); font-size: 0.8rem;">\u539F\u59CB\u8BA2\u9605\u5E93\u4E0D\u53EF\u7528\uFF1A\${err.message}</div>\`;
+            }
+        }
 
         async function generateConfigForMode(modeId) {
             const container = document.getElementById(\`panel-\${modeId}\`);
@@ -3369,6 +3445,7 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=fP.generate
 
         initApp();
         loadSavedList();
+        loadSourceLibrary();
     </script>
 </body>
 

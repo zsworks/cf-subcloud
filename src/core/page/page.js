@@ -694,6 +694,12 @@ export async function getFakePage(e) {
             </div>
         </div>
 
+        <!-- 原始订阅库 -->
+        <div class="form-card" id="sourceCard">
+            <div class="section-title">🗃️ 原始订阅库</div>
+            <div id="sourceList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
+
         <!-- 模式选择器 - 与模板选择器样式一致 -->
         <div class="form-card">
             <div class="section-title">📱 选择客户端类型</div>
@@ -1124,6 +1130,76 @@ export async function getFakePage(e) {
 
         document.getElementById('savedPrev')?.addEventListener('click', () => turnSavedPage(-1));
         document.getElementById('savedNext')?.addEventListener('click', () => turnSavedPage(1));
+
+        // ===== 原始订阅库管理 =====
+        async function loadSourceLibrary() {
+            const box = document.getElementById('sourceList');
+            if (!box) return;
+            try {
+                const resp = await fetch('/api/source/list');
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(data.error);
+                box.innerHTML = '';
+                const items = data.items || [];
+                if (!items.length) {
+                    box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">暂无原始订阅（在订阅链接行点 💾 保存）</div>';
+                    return;
+                }
+                items.forEach((s) => {
+                    const row = document.createElement('div');
+                    row.className = 'saved-item';
+                    const time = s.fetchedAt ? new Date(s.fetchedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                    const info = document.createElement('div');
+                    info.className = 'saved-info';
+                    info.innerHTML = \`<span class="saved-mode">🗃️ \${s.name}</span><span class="saved-meta">\${time} 拉取 · 内容加密存储</span>\`;
+                    const actions = document.createElement('div');
+                    actions.className = 'saved-actions';
+                    const refreshBtn = document.createElement('button');
+                    refreshBtn.className = 'saved-btn';
+                    refreshBtn.innerText = '刷新';
+                    refreshBtn.onclick = async () => {
+                        try {
+                            refreshBtn.disabled = true;
+                            const r = await fetch('/api/source/refresh', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: s.id }),
+                            }).then((x) => x.json());
+                            if (!r.success) throw new Error(r.error || '刷新失败');
+                            showToast(\`✓ 已刷新「\${s.name}」，相关短链将自动重新生成\`, 'success');
+                            loadSourceLibrary();
+                        } catch (err) {
+                            showToast(\`✗ \${err.message}\`, 'error');
+                        } finally {
+                            refreshBtn.disabled = false;
+                        }
+                    };
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'saved-btn saved-btn-danger';
+                    delBtn.innerText = '删除';
+                    delBtn.onclick = async () => {
+                        if (!confirm(\`删除原始订阅「\${s.name}」？已生成缓存的短链仍可访问，但无法重新生成。\`)) return;
+                        try {
+                            const r = await fetch('/api/source/delete', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: s.id }),
+                            }).then((x) => x.json());
+                            if (!r.success) throw new Error(r.error || '删除失败');
+                            showToast('✓ 已删除', 'success');
+                            loadSourceLibrary();
+                        } catch (err) {
+                            showToast(\`✗ \${err.message}\`, 'error');
+                        }
+                    };
+                    actions.append(refreshBtn, delBtn);
+                    row.append(info, actions);
+                    box.appendChild(row);
+                });
+            } catch (err) {
+                box.innerHTML = \`<div style="color: var(--text-muted); font-size: 0.8rem;">原始订阅库不可用：\${err.message}</div>\`;
+            }
+        }
 
         async function generateConfigForMode(modeId) {
             const container = document.getElementById(\`panel-\${modeId}\`);
@@ -1614,6 +1690,7 @@ export async function getFakePage(e) {
 
         initApp();
         loadSavedList();
+        loadSourceLibrary();
     </script>
 </body>
 
