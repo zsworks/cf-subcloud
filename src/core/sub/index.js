@@ -1,6 +1,7 @@
 import { ProxyUtils } from '../Sub-Store/backend/src/core/proxy-utils/index.js';
 import PROXY_PRODUCERS from '../Sub-Store/backend/src/core/proxy-utils/producers/index.js';
 import { fetchResponse, isUrl } from '../../utils/index.js';
+import { splitInputItems } from '../../utils/urlItems.js';
 import YAML from 'yaml';
 
 /**
@@ -74,7 +75,7 @@ async function produceArtifact(urls, platform, heruser) {
     const responseProxies = [],
         validUrls = [],
         invalidUrls = [];
-    const url = (Array.isArray(urls) ? urls : [urls]).map((i) => i.split(',')).flat();
+    const url = splitInputItems(urls);
     url.forEach((item) => {
         if (isUrl(item)) {
             validUrls.push(item);
