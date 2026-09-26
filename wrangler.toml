@@ -6,3 +6,8 @@ compatibility_flags = ["nodejs_compat"]
 [assets]
 directory = "./template"
 binding = "ASSETS"
+
+[[d1_databases]]
+binding = "SHORT_LINK"
+database_name = "cf-subcloud-links"
+database_id = "1896b371-dca1-4bcb-93e1-c6c6be40f39e"
