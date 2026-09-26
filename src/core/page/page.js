@@ -1005,9 +1005,9 @@ export async function getFakePage(e) {
                     const rawCount = (unlocked.rawUrls || []).length;
                     const srcPart = srcCount ? \`\${srcCount}个订阅源\` : '';
                     const rawPart = rawCount ? \`\${rawCount}条链接\` : '';
-                    info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} · \${[srcPart, rawPart].filter(Boolean).join(' + ')} · \${date} · \${unlocked.hasContent ? '📦 已缓存' : '⏳ 待生成'}\`</span>\`;
+                    info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} · \${[srcPart, rawPart].filter(Boolean).join(' + ')} · \${date} · \${unlocked.hasContent ? '📦 已缓存' : '⏳ 待生成'}</span>\`;
                 } else {
-                    info.innerHTML = \`<span class="saved-code">\${labelText ? '' : '🔒 '}/s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` · \${labelText}\` : ' · 输入口令后显示详情'}\`</span>\`;
+                    info.innerHTML = \`<span class="saved-code">\${labelText ? '' : '🔒 '}/s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` · \${labelText}\` : ' · 输入口令后显示详情'}</span>\`;
                 }
                 const actions = document.createElement('div');
                 actions.className = 'saved-actions';
@@ -1134,17 +1134,18 @@ export async function getFakePage(e) {
         // ===== 原始订阅库管理 =====
         async function loadSourceLibrary() {
             const box = document.getElementById('sourceList');
+            const card = document.getElementById('sourceCard');
             if (!box) return;
+            // 未保存任何原始订阅时整卡隐藏，保持默认界面简洁
+            if (card) card.style.display = 'none';
             try {
                 const resp = await fetch('/api/source/list');
                 const data = await resp.json();
                 if (!resp.ok || !data.success) throw new Error(data.error);
                 box.innerHTML = '';
                 const items = data.items || [];
-                if (!items.length) {
-                    box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">暂无原始订阅（在订阅链接行点 💾 保存）</div>';
-                    return;
-                }
+                if (!items.length) return;
+                if (card) card.style.display = '';
                 items.forEach((s) => {
                     const row = document.createElement('div');
                     row.className = 'saved-item';
@@ -1197,7 +1198,8 @@ export async function getFakePage(e) {
                     box.appendChild(row);
                 });
             } catch (err) {
-                box.innerHTML = \`<div style="color: var(--text-muted); font-size: 0.8rem;">原始订阅库不可用：\${err.message}</div>\`;
+                box.innerHTML = '';
+                console.warn('原始订阅库不可用', err.message);
             }
         }
 

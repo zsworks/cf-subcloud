@@ -2760,9 +2760,9 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=fP.generate
                     const rawCount = (unlocked.rawUrls || []).length;
                     const srcPart = srcCount ? \`\${srcCount}\u4E2A\u8BA2\u9605\u6E90\` : '';
                     const rawPart = rawCount ? \`\${rawCount}\u6761\u94FE\u63A5\` : '';
-                    info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} \xB7 \${[srcPart, rawPart].filter(Boolean).join(' + ')} \xB7 \${date} \xB7 \${unlocked.hasContent ? '\u{1F4E6} \u5DF2\u7F13\u5B58' : '\u23F3 \u5F85\u751F\u6210'}\`</span>\`;
+                    info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} \xB7 \${[srcPart, rawPart].filter(Boolean).join(' + ')} \xB7 \${date} \xB7 \${unlocked.hasContent ? '\u{1F4E6} \u5DF2\u7F13\u5B58' : '\u23F3 \u5F85\u751F\u6210'}</span>\`;
                 } else {
-                    info.innerHTML = \`<span class="saved-code">\${labelText ? '' : '\u{1F512} '}/s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` \xB7 \${labelText}\` : ' \xB7 \u8F93\u5165\u53E3\u4EE4\u540E\u663E\u793A\u8BE6\u60C5'}\`</span>\`;
+                    info.innerHTML = \`<span class="saved-code">\${labelText ? '' : '\u{1F512} '}/s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` \xB7 \${labelText}\` : ' \xB7 \u8F93\u5165\u53E3\u4EE4\u540E\u663E\u793A\u8BE6\u60C5'}</span>\`;
                 }
                 const actions = document.createElement('div');
                 actions.className = 'saved-actions';
@@ -2889,17 +2889,18 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=fP.generate
         // ===== \u539F\u59CB\u8BA2\u9605\u5E93\u7BA1\u7406 =====
         async function loadSourceLibrary() {
             const box = document.getElementById('sourceList');
+            const card = document.getElementById('sourceCard');
             if (!box) return;
+            // \u672A\u4FDD\u5B58\u4EFB\u4F55\u539F\u59CB\u8BA2\u9605\u65F6\u6574\u5361\u9690\u85CF\uFF0C\u4FDD\u6301\u9ED8\u8BA4\u754C\u9762\u7B80\u6D01
+            if (card) card.style.display = 'none';
             try {
                 const resp = await fetch('/api/source/list');
                 const data = await resp.json();
                 if (!resp.ok || !data.success) throw new Error(data.error);
                 box.innerHTML = '';
                 const items = data.items || [];
-                if (!items.length) {
-                    box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">\u6682\u65E0\u539F\u59CB\u8BA2\u9605\uFF08\u5728\u8BA2\u9605\u94FE\u63A5\u884C\u70B9 \u{1F4BE} \u4FDD\u5B58\uFF09</div>';
-                    return;
-                }
+                if (!items.length) return;
+                if (card) card.style.display = '';
                 items.forEach((s) => {
                     const row = document.createElement('div');
                     row.className = 'saved-item';
@@ -2952,7 +2953,8 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=fP.generate
                     box.appendChild(row);
                 });
             } catch (err) {
-                box.innerHTML = \`<div style="color: var(--text-muted); font-size: 0.8rem;">\u539F\u59CB\u8BA2\u9605\u5E93\u4E0D\u53EF\u7528\uFF1A\${err.message}</div>\`;
+                box.innerHTML = '';
+                console.warn('\u539F\u59CB\u8BA2\u9605\u5E93\u4E0D\u53EF\u7528', err.message);
             }
         }
 
