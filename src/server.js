@@ -2369,6 +2369,49 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=f$.generate
             color: #6c757d;
         }
 
+        .row-tool-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+            user-select: none;
+        }
+        .save-btn-circle { border: 1px solid var(--border-light); color: var(--primary); background: #fff; }
+        .save-btn-circle:active { transform: scale(0.92); }
+        .src-caret-btn { border: 1px solid var(--border-light); color: var(--text-muted); background: #fff; font-size: 0.6rem; }
+        .src-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+            border-radius: 999px;
+            padding: 5px 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            max-width: 100%;
+        }
+        .src-chip-x { cursor: pointer; font-weight: 400; opacity: 0.6; }
+        .src-chip-x:hover { opacity: 1; }
+        .src-dd {
+            position: absolute;
+            z-index: 30;
+            background: #fff;
+            border: 1px solid var(--border-light);
+            border-radius: 0.8rem;
+            box-shadow: var(--shadow-md);
+            max-height: 200px;
+            overflow-y: auto;
+            min-width: 160px;
+        }
+        .src-dd-item { padding: 8px 14px; font-size: 0.82rem; cursor: pointer; }
+        .src-dd-item:hover { background: rgba(99, 102, 241, 0.08); }
+
         @media (max-width: 560px) {
             .glass-container {
                 padding: 1.2rem;
@@ -2449,6 +2492,18 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=f$.generate
             <button id="keyDialogCancel"
                 style="border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">\u53D6\u6D88</button>
             <button id="keyDialogOk"
+                style="border: none; background: var(--primary); color: #fff; border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">\u786E\u5B9A</button>
+        </div>
+    </dialog>
+
+    <dialog id="nameDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; box-shadow: var(--shadow-md); position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; width: min(22rem, calc(100vw - 3rem));">
+        <p id="nameDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
+        <input type="text" id="nameDialogInput" placeholder="\u8F93\u5165\u7B80\u77ED\u540D\u79F0\uFF08\u5982\uFF1A\u673A\u573AA\uFF09"
+            style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center; margin-bottom: 1.2rem;" />
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button id="nameDialogCancel"
+                style="border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">\u53D6\u6D88</button>
+            <button id="nameDialogOk"
                 style="border: none; background: var(--primary); color: #fff; border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">\u786E\u5B9A</button>
         </div>
     </dialog>
@@ -2896,6 +2951,149 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=f$.generate
             setTimeout(() => toast.remove(), 2000);
         }
 
+        // \u540D\u79F0\u8F93\u5165\u5F39\u7A97\uFF08\u539F\u59CB\u8BA2\u9605\u5165\u5E93\u7528\uFF09
+        function askName(message, prefill = '') {
+            return new Promise((resolve) => {
+                const dlg = document.getElementById('nameDialog');
+                const msg = document.getElementById('nameDialogMsg');
+                const input = document.getElementById('nameDialogInput');
+                const ok = document.getElementById('nameDialogOk');
+                const cancel = document.getElementById('nameDialogCancel');
+                msg.innerText = message;
+                input.value = prefill;
+                let settled = false;
+                const done = (val) => {
+                    if (settled) return;
+                    settled = true;
+                    ok.onclick = null;
+                    cancel.onclick = null;
+                    input.onkeydown = null;
+                    dlg.close();
+                    resolve(val);
+                };
+                ok.onclick = () => done(input.value.trim() || null);
+                cancel.onclick = () => done(null);
+                input.onkeydown = (ev) => { if (ev.key === 'Enter') done(input.value.trim() || null); };
+                dlg.showModal();
+                setTimeout(() => input.focus(), 50);
+            });
+        }
+
+        // \u884C \u2192 \u5DF2\u5165\u5E93\u6807\u7B7E\u6001\uFF08\u8868\u5355\u6301\u6709 id\uFF0CURL \u4E0D\u843D\u8868\u5355\uFF09
+        function setRowSource(row, src) {
+            row.dataset.sourceId = src.id;
+            row.dataset.sourceName = src.name;
+            const input = row.querySelector('.dynamic-link-input');
+            input.style.display = 'none';
+            const chip = document.createElement('span');
+            chip.className = 'src-chip';
+            const label = document.createElement('span');
+            label.innerText = \`\u{1F5C3}\uFE0F \${src.name}\`;
+            const x = document.createElement('span');
+            x.className = 'src-chip-x';
+            x.innerText = '\u2715';
+            x.title = '\u79FB\u9664\u8BE5\u8BA2\u9605\u6E90';
+            x.onclick = () => clearRowSource(row);
+            chip.append(label, x);
+            input.insertAdjacentElement('afterend', chip);
+        }
+
+        function clearRowSource(row) {
+            delete row.dataset.sourceId;
+            delete row.dataset.sourceName;
+            const chip = row.querySelector('.src-chip');
+            if (chip) chip.remove();
+            const input = row.querySelector('.dynamic-link-input');
+            input.style.display = '';
+            input.value = '';
+            input.focus();
+        }
+
+        // \u6C47\u603B\u884C\u72B6\u6001\uFF1A\u5DF2\u5165\u5E93\u6E90 + \u88F8 URL
+        function collectLinkRows(wrapper) {
+            const sources = [];
+            const rawUrls = [];
+            wrapper.querySelectorAll('.link-row').forEach((row) => {
+                if (row.dataset.sourceId) {
+                    sources.push({ id: row.dataset.sourceId, name: row.dataset.sourceName });
+                } else {
+                    const v = row.querySelector('.dynamic-link-input')?.value.trim();
+                    if (v) rawUrls.push(v);
+                }
+            });
+            return { sources, rawUrls };
+        }
+
+        // \u{1F4BE} \u4FDD\u5B58\u5F53\u524D\u884C URL \u5230\u539F\u59CB\u8BA2\u9605\u5E93\uFF08\u4FDD\u5B58\u5373\u5B9E\u65F6\u62C9\u53D6\u4E0A\u6E38\uFF09
+        async function saveRowToLibrary(row) {
+            const input = row.querySelector('.dynamic-link-input');
+            const url = input.value.trim();
+            if (!/^https?:\\/\\//.test(url)) {
+                showToast('\u2717 \u8BF7\u5148\u8F93\u5165\u6709\u6548\u7684\u8BA2\u9605\u94FE\u63A5', 'error');
+                return;
+            }
+            const name = await askName('\u5C06\u5B9E\u65F6\u62C9\u53D6\u8BE5\u8BA2\u9605\u5185\u5BB9\u5E76\u52A0\u5BC6\u4FDD\u5B58\u5230\u670D\u52A1\u5668\uFF0C\u8BF7\u8F93\u5165\u4E00\u4E2A\u7B80\u77ED\u540D\u79F0\u4EE5\u4FBF\u540E\u7EED\u9009\u7528\u3002');
+            if (!name) return;
+            try {
+                showToast('\u23F3 \u6B63\u5728\u62C9\u53D6\u5E76\u4FDD\u5B58\u539F\u59CB\u8BA2\u9605\u2026', 'success');
+                const resp = await fetch('/api/source/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, name }),
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error || '\u4FDD\u5B58\u5931\u8D25');
+                setRowSource(row, { id: data.id, name: data.name });
+                loadSourceLibrary();
+                showToast(\`\u2713 \u5DF2\u4FDD\u5B58\u539F\u59CB\u8BA2\u9605\u300C\${data.name}\u300D\`, 'success');
+            } catch (err) {
+                showToast(\`\u2717 \${err.message || '\u4FDD\u5B58\u5931\u8D25'}\`, 'error');
+            }
+        }
+
+        // \u25BE \u4E0B\u62C9\u9009\u62E9\u5DF2\u4FDD\u5B58\u7684\u539F\u59CB\u8BA2\u9605\uFF08\u4EC5\u663E\u793A\u540D\u79F0\uFF0CURL \u4E0D\u51FA\u670D\u52A1\u7AEF\uFF09
+        async function openSourceDropdown(row) {
+            document.querySelectorAll('.src-dd').forEach((d) => d.remove());
+            const dd = document.createElement('div');
+            dd.className = 'src-dd';
+            dd.innerHTML = '<div style="padding:8px 14px;color:var(--text-muted);font-size:0.78rem;">\u52A0\u8F7D\u4E2D\u2026</div>';
+            document.body.appendChild(dd);
+            const rect = row.getBoundingClientRect();
+            dd.style.top = \`\${window.scrollY + rect.bottom + 4}px\`;
+            dd.style.left = \`\${window.scrollX + rect.left}px\`;
+            const close = (ev) => {
+                if (!dd.contains(ev.target)) {
+                    dd.remove();
+                    document.removeEventListener('click', close);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', close), 0);
+            try {
+                const resp = await fetch('/api/source/list');
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(data.error || '\u52A0\u8F7D\u5931\u8D25');
+                dd.innerHTML = '';
+                const items = data.items || [];
+                if (!items.length) {
+                    dd.innerHTML = '<div style="padding:8px 14px;color:var(--text-muted);font-size:0.78rem;">\u6682\u65E0\u5DF2\u4FDD\u5B58\u7684\u539F\u59CB\u8BA2\u9605</div>';
+                    return;
+                }
+                items.forEach((s) => {
+                    const item = document.createElement('div');
+                    item.className = 'src-dd-item';
+                    item.innerText = \`\u{1F5C3}\uFE0F \${s.name}\`;
+                    item.onclick = () => {
+                        setRowSource(row, { id: s.id, name: s.name });
+                        dd.remove();
+                        document.removeEventListener('click', close);
+                    };
+                    dd.appendChild(item);
+                });
+            } catch (err) {
+                dd.innerHTML = \`<div style="padding:8px 14px;color:#ef4444;font-size:0.78rem;">\${err.message}</div>\`;
+            }
+        }
+
         function addLinkRow(containerId, modeId) {
             const linksContainer = document.getElementById(containerId);
             if (!linksContainer) return;
@@ -2909,8 +3107,17 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=f$.generate
             addBtn.className = 'add-btn-circle';
             addBtn.innerText = '\uFF0B';
             addBtn.onclick = () => addLinkRow(containerId, modeId);
-            newRow.appendChild(input);
-            newRow.appendChild(addBtn);
+            const saveBtn = document.createElement('div');
+            saveBtn.className = 'row-tool-btn save-btn-circle';
+            saveBtn.innerText = '\u{1F4BE}';
+            saveBtn.title = '\u4FDD\u5B58\u5230\u539F\u59CB\u8BA2\u9605\u5E93\uFF08\u8F93\u5165\u540D\u79F0\u540E\u5B9E\u65F6\u62C9\u53D6\u5185\u5BB9\uFF09';
+            saveBtn.onclick = () => saveRowToLibrary(newRow);
+            const caretBtn = document.createElement('div');
+            caretBtn.className = 'row-tool-btn src-caret-btn';
+            caretBtn.innerText = '\u25BE';
+            caretBtn.title = '\u9009\u62E9\u5DF2\u4FDD\u5B58\u7684\u539F\u59CB\u8BA2\u9605';
+            caretBtn.onclick = () => openSourceDropdown(newRow);
+            newRow.append(input, saveBtn, caretBtn, addBtn);
             linksContainer.appendChild(newRow);
         }
 
@@ -2989,7 +3196,19 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=f$.generate
             addFirstBtn.className = 'add-btn-circle';
             addFirstBtn.innerText = '\uFF0B';
             addFirstBtn.onclick = () => addLinkRow(\`links-wrapper-\${modeId}\`, modeId);
+            const saveFirstBtn = document.createElement('div');
+            saveFirstBtn.className = 'row-tool-btn save-btn-circle';
+            saveFirstBtn.innerText = '\u{1F4BE}';
+            saveFirstBtn.title = '\u4FDD\u5B58\u5230\u539F\u59CB\u8BA2\u9605\u5E93\uFF08\u8F93\u5165\u540D\u79F0\u540E\u5B9E\u65F6\u62C9\u53D6\u5185\u5BB9\uFF09';
+            saveFirstBtn.onclick = () => saveRowToLibrary(firstRow);
+            const caretFirstBtn = document.createElement('div');
+            caretFirstBtn.className = 'row-tool-btn src-caret-btn';
+            caretFirstBtn.innerText = '\u25BE';
+            caretFirstBtn.title = '\u9009\u62E9\u5DF2\u4FDD\u5B58\u7684\u539F\u59CB\u8BA2\u9605';
+            caretFirstBtn.onclick = () => openSourceDropdown(firstRow);
             firstRow.appendChild(firstInput);
+            firstRow.appendChild(saveFirstBtn);
+            firstRow.appendChild(caretFirstBtn);
             firstRow.appendChild(addFirstBtn);
             linksWrapper.appendChild(firstRow);
             linkCard.appendChild(linksWrapper);

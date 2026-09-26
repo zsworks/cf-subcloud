@@ -614,6 +614,49 @@ export async function getFakePage(e) {
             color: #6c757d;
         }
 
+        .row-tool-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+            user-select: none;
+        }
+        .save-btn-circle { border: 1px solid var(--border-light); color: var(--primary); background: #fff; }
+        .save-btn-circle:active { transform: scale(0.92); }
+        .src-caret-btn { border: 1px solid var(--border-light); color: var(--text-muted); background: #fff; font-size: 0.6rem; }
+        .src-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+            border-radius: 999px;
+            padding: 5px 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            max-width: 100%;
+        }
+        .src-chip-x { cursor: pointer; font-weight: 400; opacity: 0.6; }
+        .src-chip-x:hover { opacity: 1; }
+        .src-dd {
+            position: absolute;
+            z-index: 30;
+            background: #fff;
+            border: 1px solid var(--border-light);
+            border-radius: 0.8rem;
+            box-shadow: var(--shadow-md);
+            max-height: 200px;
+            overflow-y: auto;
+            min-width: 160px;
+        }
+        .src-dd-item { padding: 8px 14px; font-size: 0.82rem; cursor: pointer; }
+        .src-dd-item:hover { background: rgba(99, 102, 241, 0.08); }
+
         @media (max-width: 560px) {
             .glass-container {
                 padding: 1.2rem;
@@ -694,6 +737,18 @@ export async function getFakePage(e) {
             <button id="keyDialogCancel"
                 style="border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">取消</button>
             <button id="keyDialogOk"
+                style="border: none; background: var(--primary); color: #fff; border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">确定</button>
+        </div>
+    </dialog>
+
+    <dialog id="nameDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; box-shadow: var(--shadow-md); position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; width: min(22rem, calc(100vw - 3rem));">
+        <p id="nameDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
+        <input type="text" id="nameDialogInput" placeholder="输入简短名称（如：机场A）"
+            style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center; margin-bottom: 1.2rem;" />
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button id="nameDialogCancel"
+                style="border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">取消</button>
+            <button id="nameDialogOk"
                 style="border: none; background: var(--primary); color: #fff; border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">确定</button>
         </div>
     </dialog>
@@ -1141,6 +1196,149 @@ export async function getFakePage(e) {
             setTimeout(() => toast.remove(), 2000);
         }
 
+        // 名称输入弹窗（原始订阅入库用）
+        function askName(message, prefill = '') {
+            return new Promise((resolve) => {
+                const dlg = document.getElementById('nameDialog');
+                const msg = document.getElementById('nameDialogMsg');
+                const input = document.getElementById('nameDialogInput');
+                const ok = document.getElementById('nameDialogOk');
+                const cancel = document.getElementById('nameDialogCancel');
+                msg.innerText = message;
+                input.value = prefill;
+                let settled = false;
+                const done = (val) => {
+                    if (settled) return;
+                    settled = true;
+                    ok.onclick = null;
+                    cancel.onclick = null;
+                    input.onkeydown = null;
+                    dlg.close();
+                    resolve(val);
+                };
+                ok.onclick = () => done(input.value.trim() || null);
+                cancel.onclick = () => done(null);
+                input.onkeydown = (ev) => { if (ev.key === 'Enter') done(input.value.trim() || null); };
+                dlg.showModal();
+                setTimeout(() => input.focus(), 50);
+            });
+        }
+
+        // 行 → 已入库标签态（表单持有 id，URL 不落表单）
+        function setRowSource(row, src) {
+            row.dataset.sourceId = src.id;
+            row.dataset.sourceName = src.name;
+            const input = row.querySelector('.dynamic-link-input');
+            input.style.display = 'none';
+            const chip = document.createElement('span');
+            chip.className = 'src-chip';
+            const label = document.createElement('span');
+            label.innerText = \`🗃️ \${src.name}\`;
+            const x = document.createElement('span');
+            x.className = 'src-chip-x';
+            x.innerText = '✕';
+            x.title = '移除该订阅源';
+            x.onclick = () => clearRowSource(row);
+            chip.append(label, x);
+            input.insertAdjacentElement('afterend', chip);
+        }
+
+        function clearRowSource(row) {
+            delete row.dataset.sourceId;
+            delete row.dataset.sourceName;
+            const chip = row.querySelector('.src-chip');
+            if (chip) chip.remove();
+            const input = row.querySelector('.dynamic-link-input');
+            input.style.display = '';
+            input.value = '';
+            input.focus();
+        }
+
+        // 汇总行状态：已入库源 + 裸 URL
+        function collectLinkRows(wrapper) {
+            const sources = [];
+            const rawUrls = [];
+            wrapper.querySelectorAll('.link-row').forEach((row) => {
+                if (row.dataset.sourceId) {
+                    sources.push({ id: row.dataset.sourceId, name: row.dataset.sourceName });
+                } else {
+                    const v = row.querySelector('.dynamic-link-input')?.value.trim();
+                    if (v) rawUrls.push(v);
+                }
+            });
+            return { sources, rawUrls };
+        }
+
+        // 💾 保存当前行 URL 到原始订阅库（保存即实时拉取上游）
+        async function saveRowToLibrary(row) {
+            const input = row.querySelector('.dynamic-link-input');
+            const url = input.value.trim();
+            if (!/^https?:\\/\\//.test(url)) {
+                showToast('✗ 请先输入有效的订阅链接', 'error');
+                return;
+            }
+            const name = await askName('将实时拉取该订阅内容并加密保存到服务器，请输入一个简短名称以便后续选用。');
+            if (!name) return;
+            try {
+                showToast('⏳ 正在拉取并保存原始订阅…', 'success');
+                const resp = await fetch('/api/source/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, name }),
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error || '保存失败');
+                setRowSource(row, { id: data.id, name: data.name });
+                loadSourceLibrary();
+                showToast(\`✓ 已保存原始订阅「\${data.name}」\`, 'success');
+            } catch (err) {
+                showToast(\`✗ \${err.message || '保存失败'}\`, 'error');
+            }
+        }
+
+        // ▾ 下拉选择已保存的原始订阅（仅显示名称，URL 不出服务端）
+        async function openSourceDropdown(row) {
+            document.querySelectorAll('.src-dd').forEach((d) => d.remove());
+            const dd = document.createElement('div');
+            dd.className = 'src-dd';
+            dd.innerHTML = '<div style="padding:8px 14px;color:var(--text-muted);font-size:0.78rem;">加载中…</div>';
+            document.body.appendChild(dd);
+            const rect = row.getBoundingClientRect();
+            dd.style.top = \`\${window.scrollY + rect.bottom + 4}px\`;
+            dd.style.left = \`\${window.scrollX + rect.left}px\`;
+            const close = (ev) => {
+                if (!dd.contains(ev.target)) {
+                    dd.remove();
+                    document.removeEventListener('click', close);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', close), 0);
+            try {
+                const resp = await fetch('/api/source/list');
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(data.error || '加载失败');
+                dd.innerHTML = '';
+                const items = data.items || [];
+                if (!items.length) {
+                    dd.innerHTML = '<div style="padding:8px 14px;color:var(--text-muted);font-size:0.78rem;">暂无已保存的原始订阅</div>';
+                    return;
+                }
+                items.forEach((s) => {
+                    const item = document.createElement('div');
+                    item.className = 'src-dd-item';
+                    item.innerText = \`🗃️ \${s.name}\`;
+                    item.onclick = () => {
+                        setRowSource(row, { id: s.id, name: s.name });
+                        dd.remove();
+                        document.removeEventListener('click', close);
+                    };
+                    dd.appendChild(item);
+                });
+            } catch (err) {
+                dd.innerHTML = \`<div style="padding:8px 14px;color:#ef4444;font-size:0.78rem;">\${err.message}</div>\`;
+            }
+        }
+
         function addLinkRow(containerId, modeId) {
             const linksContainer = document.getElementById(containerId);
             if (!linksContainer) return;
@@ -1154,8 +1352,17 @@ export async function getFakePage(e) {
             addBtn.className = 'add-btn-circle';
             addBtn.innerText = '＋';
             addBtn.onclick = () => addLinkRow(containerId, modeId);
-            newRow.appendChild(input);
-            newRow.appendChild(addBtn);
+            const saveBtn = document.createElement('div');
+            saveBtn.className = 'row-tool-btn save-btn-circle';
+            saveBtn.innerText = '💾';
+            saveBtn.title = '保存到原始订阅库（输入名称后实时拉取内容）';
+            saveBtn.onclick = () => saveRowToLibrary(newRow);
+            const caretBtn = document.createElement('div');
+            caretBtn.className = 'row-tool-btn src-caret-btn';
+            caretBtn.innerText = '▾';
+            caretBtn.title = '选择已保存的原始订阅';
+            caretBtn.onclick = () => openSourceDropdown(newRow);
+            newRow.append(input, saveBtn, caretBtn, addBtn);
             linksContainer.appendChild(newRow);
         }
 
@@ -1234,7 +1441,19 @@ export async function getFakePage(e) {
             addFirstBtn.className = 'add-btn-circle';
             addFirstBtn.innerText = '＋';
             addFirstBtn.onclick = () => addLinkRow(\`links-wrapper-\${modeId}\`, modeId);
+            const saveFirstBtn = document.createElement('div');
+            saveFirstBtn.className = 'row-tool-btn save-btn-circle';
+            saveFirstBtn.innerText = '💾';
+            saveFirstBtn.title = '保存到原始订阅库（输入名称后实时拉取内容）';
+            saveFirstBtn.onclick = () => saveRowToLibrary(firstRow);
+            const caretFirstBtn = document.createElement('div');
+            caretFirstBtn.className = 'row-tool-btn src-caret-btn';
+            caretFirstBtn.innerText = '▾';
+            caretFirstBtn.title = '选择已保存的原始订阅';
+            caretFirstBtn.onclick = () => openSourceDropdown(firstRow);
             firstRow.appendChild(firstInput);
+            firstRow.appendChild(saveFirstBtn);
+            firstRow.appendChild(caretFirstBtn);
             firstRow.appendChild(addFirstBtn);
             linksWrapper.appendChild(firstRow);
             linkCard.appendChild(linksWrapper);
