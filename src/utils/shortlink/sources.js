@@ -2,10 +2,10 @@ import YAML from 'yaml';
 import { fetchResponse } from '../fetchResponse.js';
 import { getKeys, encryptBlob, decryptBlob, hmacB64url } from './crypto.js';
 
-let tableReady = false;
-// 惰性建表（每个 isolate 仅一次）；URL 与上游内容全部加密存于 blob，仅名称与时间明文
+const readyDbs = new WeakSet();
+// 惰性建表（按 db 实例记忆）；URL 与上游内容全部加密存于 blob，仅名称与时间明文
 export async function ensureSourceTable(db) {
-    if (tableReady) return;
+    if (readyDbs.has(db)) return;
     await db
         .prepare(
             `CREATE TABLE IF NOT EXISTS sub_sources (
@@ -16,7 +16,7 @@ export async function ensureSourceTable(db) {
     )`,
         )
         .run();
-    tableReady = true;
+    readyDbs.add(db);
 }
 
 // 实时拉上游（v2ray UA，base64 兼容性最好）；失败 throw，调用方不入库
