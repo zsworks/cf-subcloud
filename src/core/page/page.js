@@ -620,20 +620,20 @@ export async function getFakePage(e) {
         }
 
         .row-tool-btn {
-            width: 26px;
-            height: 26px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 0.8rem;
+            font-size: 1.05rem;
             flex-shrink: 0;
             user-select: none;
         }
-        .save-btn-circle { border: 1px solid var(--border-light); color: var(--primary); background: #fff; }
+        .save-btn-circle { border: 1.5px solid var(--border-light); color: var(--primary); background: #fff; }
         .save-btn-circle:active { transform: scale(0.92); }
-        .src-caret-btn { border: 1px solid var(--border-light); color: var(--text-muted); background: #fff; font-size: 0.6rem; }
+        .src-caret-btn { border: 1.5px solid var(--border-light); color: var(--text-muted); background: #fff; font-size: 1.1rem; }
         .src-chip {
             display: inline-flex;
             align-items: center;
@@ -1453,7 +1453,7 @@ export async function getFakePage(e) {
             caretBtn.innerText = '▾';
             caretBtn.title = '选择已保存的原始订阅';
             caretBtn.onclick = () => openSourceDropdown(newRow);
-            newRow.append(input, saveBtn, caretBtn, addBtn);
+            newRow.append(input, caretBtn, saveBtn, addBtn);
             linksContainer.appendChild(newRow);
         }
 
@@ -1543,8 +1543,8 @@ export async function getFakePage(e) {
             caretFirstBtn.title = '选择已保存的原始订阅';
             caretFirstBtn.onclick = () => openSourceDropdown(firstRow);
             firstRow.appendChild(firstInput);
-            firstRow.appendChild(saveFirstBtn);
             firstRow.appendChild(caretFirstBtn);
+            firstRow.appendChild(saveFirstBtn);
             firstRow.appendChild(addFirstBtn);
             linksWrapper.appendChild(firstRow);
             linkCard.appendChild(linksWrapper);

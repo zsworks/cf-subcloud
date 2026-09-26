@@ -2374,20 +2374,20 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=fx.generate
         }
 
         .row-tool-btn {
-            width: 26px;
-            height: 26px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 0.8rem;
+            font-size: 1.05rem;
             flex-shrink: 0;
             user-select: none;
         }
-        .save-btn-circle { border: 1px solid var(--border-light); color: var(--primary); background: #fff; }
+        .save-btn-circle { border: 1.5px solid var(--border-light); color: var(--primary); background: #fff; }
         .save-btn-circle:active { transform: scale(0.92); }
-        .src-caret-btn { border: 1px solid var(--border-light); color: var(--text-muted); background: #fff; font-size: 0.6rem; }
+        .src-caret-btn { border: 1.5px solid var(--border-light); color: var(--text-muted); background: #fff; font-size: 1.1rem; }
         .src-chip {
             display: inline-flex;
             align-items: center;
@@ -3207,7 +3207,7 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=fx.generate
             caretBtn.innerText = '\u25BE';
             caretBtn.title = '\u9009\u62E9\u5DF2\u4FDD\u5B58\u7684\u539F\u59CB\u8BA2\u9605';
             caretBtn.onclick = () => openSourceDropdown(newRow);
-            newRow.append(input, saveBtn, caretBtn, addBtn);
+            newRow.append(input, caretBtn, saveBtn, addBtn);
             linksContainer.appendChild(newRow);
         }
 
@@ -3297,8 +3297,8 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=fx.generate
             caretFirstBtn.title = '\u9009\u62E9\u5DF2\u4FDD\u5B58\u7684\u539F\u59CB\u8BA2\u9605';
             caretFirstBtn.onclick = () => openSourceDropdown(firstRow);
             firstRow.appendChild(firstInput);
-            firstRow.appendChild(saveFirstBtn);
             firstRow.appendChild(caretFirstBtn);
+            firstRow.appendChild(saveFirstBtn);
             firstRow.appendChild(addFirstBtn);
             linksWrapper.appendChild(firstRow);
             linkCard.appendChild(linksWrapper);
