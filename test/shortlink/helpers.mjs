@@ -98,7 +98,6 @@ export function createMockD1({ legacy = false } = {}) {
 // 构造测试 env（真实 getKeys + mock D1）
 export const createEnv = (d1) => ({ SHORT_LINK: d1, LINK_ENC_KEY: 'k'.repeat(32) });
 
-// 一个可被 ProxyUtils.parse 识别的最小 vmess 订阅（base64(vmess json)）
-export const SAMPLE_B64_SUB = btoa(
-    JSON.stringify({ v: '2', ps: 'test-node', add: '1.2.3.4', port: '443', id: '0b8a1dd3-dc5a-4e33-8f1f-4e6f6e6f6e6f', aid: '0', net: 'tcp', type: 'none', scy: 'auto' }),
-);
+// 标准 v2ray 订阅格式：base64( "vmess://" + base64(vmess json) )，可被 ProxyUtils.parse 识别
+const VMESS_URI = 'vmess://' + btoa(JSON.stringify({ v: '2', ps: 'test-node', add: '1.2.3.4', port: '443', id: '0b8a1dd3-dc5a-4e33-8f1f-4e6f6e6f6e6f', aid: '0', net: 'tcp', type: 'none', scy: 'auto' }));
+export const SAMPLE_B64_SUB = btoa(VMESS_URI);

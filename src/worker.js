@@ -1,6 +1,6 @@
 import { buildConfig } from './utils/env.js';
 import { handleRequest } from './utils/handler.js';
-import { handleShortLink } from './utils/shortlink.js';
+import { handleShortLink } from './utils/shortlink/index.js';
 
 export default {
     async fetch(request, env) {

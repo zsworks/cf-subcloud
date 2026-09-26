@@ -179,3 +179,7 @@ dist
 root.json
 sub-store.json
 .env*
+
+# 测试构建产物
+test-dist/
+.test-dist/

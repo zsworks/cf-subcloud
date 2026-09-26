@@ -1,5 +1,5 @@
-import { fetchWithFallback } from './fetchResponse';
-import { getNodeConversion } from './substore';
+import { fetchWithFallback } from './fetchResponse.js';
+import { getNodeConversion } from './substore.js';
 /**
  * 订阅转换
  *
