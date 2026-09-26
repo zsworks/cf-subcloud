@@ -726,12 +726,12 @@ export async function getFakePage(e) {
     <dialog id="keyDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; box-shadow: var(--shadow-md); position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; width: min(22rem, calc(100vw - 3rem));">
         <p id="keyDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
         <div style="position: relative; margin-bottom: 1.2rem;">
-            <input type="password" id="keyDialogInput" placeholder="请输入密钥"
+            <input type="password" id="keyDialogInput" placeholder="请输入访问口令"
                 style="width: 100%; padding: 10px 40px 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center;" />
-            <span id="keyToggle" title="显示/隐藏密钥"
+            <span id="keyToggle" title="显示/隐藏口令"
                 style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; width: 18px; height: 18px; color: #94a3b8; display: flex; align-items: center; justify-content: center;"></span>
         </div>
-        <input type="text" id="keyDialogLabel" placeholder="备注（可选，加密存储）"
+        <input type="text" id="keyDialogLabel" placeholder="备注（可选）"
             style="display: none; width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
             <button id="keyDialogCancel"
@@ -855,46 +855,35 @@ export async function getFakePage(e) {
             });
         }
 
-        // ===== 客户端解密（与后端 shortlink.js 算法一致：PBKDF2 + AES-GCM） =====
-        const PBKDF2_ITERATIONS = 100000;
-        const IV_LENGTH = 12;
-
-        // 密钥的 base64 编码（UTF-8 安全），用于短链接 ?key= 参数
+        // 口令的 base64 编码（UTF-8 安全），用于短链接 ?key= 参数
         function b64EncodeKey(str) {
             return btoa(String.fromCharCode(...new TextEncoder().encode(str)));
         }
 
-        async function decryptBlobClient(blobB64, passphrase, saltB64) {
-            const bytesFromB64 = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-            const salt = bytesFromB64(saltB64);
-            const combined = bytesFromB64(blobB64);
-            const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveBits']);
-            const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, keyMaterial, 256);
-            const key = await crypto.subtle.importKey('raw', bits, 'AES-GCM', false, ['decrypt']);
-            const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: combined.subarray(0, IV_LENGTH) }, key, combined.subarray(IV_LENGTH));
-            return JSON.parse(new TextDecoder().decode(plain));
-        }
-
-        // ===== 保存订阅内容（加密） =====
+        // ===== 保存订阅内容（服务端环境变量密钥加密） =====
         async function saveEncryptedContent() {
-            const sourceUrl = document.getElementById('result').value;
-            if (!sourceUrl || !sourceUrl.includes('target=')) {
+            if (!window.lastGen) {
                 showToast('✗ 请先生成订阅链接', 'error');
                 return;
             }
             const res = (await askKey(
-                '订阅配置将加密保存在服务器上，订阅内容在首次访问短链接时生成并缓存，请输入加密密钥。密钥不会存储在服务器上，忘记后将无法解密。',
+                '订阅配置将由服务端加密保存（仅本应用可解密）。请设置访问口令：访问/修改该短链接时需要提供，口令哈希存储于服务器，忘记后将无法找回。',
                 '保存',
                 { withLabel: true, labelValue: editingLabel }
             )) || {};
             const { key, label } = res;
             if (!key) return;
             try {
-                showToast('⏳ 正在生成并加密订阅内容…', 'success');
+                showToast('⏳ 正在保存订阅配置…', 'success');
                 const resp = await fetch('/api/short', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: sourceUrl, key, label: label || '', ...(editingCode ? { code: editingCode, oldKey: editingOldKey } : {}) }),
+                    body: JSON.stringify({
+                        ...window.lastGen,
+                        key,
+                        label: label || '',
+                        ...(editingCode ? { code: editingCode, oldKey: editingOldKey } : {}),
+                    }),
                 });
                 const data = await resp.json();
                 if (!resp.ok || !data.success) {
@@ -907,7 +896,7 @@ export async function getFakePage(e) {
                 const shortUrl = \`\${window.location.origin}/s/\${data.code}?key=\${b64EncodeKey(key)}\`;
                 updateResultAndQR(shortUrl);
                 navigator.clipboard.writeText(shortUrl).then(() => {
-                    showToast('✓ 已加密保存，短链接（含解密密钥）已复制', 'success');
+                    showToast('✓ 已加密保存，短链接（含访问口令）已复制', 'success');
                 }).catch(() => {
                     showToast('✓ 已加密保存，短链接已生成', 'success');
                 });
@@ -970,16 +959,17 @@ export async function getFakePage(e) {
             loadSavedList(target);
         }
 
-        // 取回单条密文并在本地解密
+        // 解锁条目：口令交服务端 HMAC 校验并解密，明文配置仅回传表单所需字段
         async function unlockEntry(code, message, btnText) {
             const { key } = (await askKey(message, btnText)) || {};
             if (!key) return null;
-            const resp = await fetch(\`/api/short/get?code=\${code}\`).then((x) => x.json());
-            if (!resp.success) throw new Error(typeof resp === 'string' ? resp : resp.error || '获取失败');
-            const obj = await decryptBlobClient(resp.blob, key, resp.salt);
-            unlockedInfo.set(code, obj);
+            const resp = await fetch(\`/api/short/get?code=\${code}&key=\${encodeURIComponent(b64EncodeKey(key))}\`).then((x) => x.json());
+            if (!resp.success) {
+                throw new Error(typeof resp === 'string' ? resp : resp.error || '获取失败');
+            }
+            unlockedInfo.set(code, { ...resp, key });
             unlockedKeys.set(code, key);
-            return { key, obj };
+            return { key, resp };
         }
 
         function renderSavedList(items) {
@@ -998,16 +988,20 @@ export async function getFakePage(e) {
                 const date = item.created
                     ? new Date(item.created).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
                     : '';
-                // 服务端仅存短码与时间；已解锁条目展示本地解密出的 label/模式/链接数
+                // 服务端返回 label；已解锁条目展示来源与缓存状态
                 const unlocked = unlockedInfo.get(item.code);
                 const info = document.createElement('div');
                 info.className = 'saved-info';
+                const labelText = unlocked?.label || item.label;
                 if (unlocked) {
                     const modeName = MODES_META[unlocked.target]?.name || unlocked.target;
-                    const urls = String(unlocked.params?.url || '').split(',').filter(Boolean);
-                    info.innerHTML = \`<span class="saved-mode">\${unlocked.label || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} · \${urls.length}条链接 · \${date} · \${unlocked.content ? '📦 已缓存' : '⏳ 待生成'}</span>\`;
+                    const srcCount = (unlocked.sources || []).length;
+                    const rawCount = (unlocked.rawUrls || []).length;
+                    const srcPart = srcCount ? \`\${srcCount}个订阅源\` : '';
+                    const rawPart = rawCount ? \`\${rawCount}条链接\` : '';
+                    info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} · \${[srcPart, rawPart].filter(Boolean).join(' + ')} · \${date} · \${unlocked.hasContent ? '📦 已缓存' : '⏳ 待生成'}\`</span>\`;
                 } else {
-                    info.innerHTML = \`<span class="saved-code">🔒 /s/\${item.code}</span><span class="saved-meta">\${date} · 输入密钥后显示详情</span>\`;
+                    info.innerHTML = \`<span class="saved-code">\${labelText ? '' : '🔒 '}/s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` · \${labelText}\` : ' · 输入口令后显示详情'}\`</span>\`;
                 }
                 const actions = document.createElement('div');
                 actions.className = 'saved-actions';
@@ -1016,14 +1010,14 @@ export async function getFakePage(e) {
                 copyBtn.innerText = '复制';
                 copyBtn.onclick = async () => {
                     try {
-                        const unlocked2 = await unlockEntry(item.code, '该订阅内容已加密，请输入解密密钥以生成可用的短链接。', '复制');
+                        const unlocked2 = await unlockEntry(item.code, '该订阅内容已加密，请输入访问口令以生成可用的短链接。', '复制');
                         if (!unlocked2) return;
                         renderSavedList(currentSavedItems);
                         const link = \`\${origin}/s/\${item.code}?key=\${b64EncodeKey(unlocked2.key)}\`;
                         await navigator.clipboard.writeText(link);
                         showToast('✓ 短链接已复制', 'success');
                     } catch {
-                        showToast('✗ 解密密钥错误', 'error');
+                        showToast('✗ 访问口令错误', 'error');
                     }
                 };
                 const editBtn = document.createElement('button');
@@ -1031,16 +1025,16 @@ export async function getFakePage(e) {
                 editBtn.innerText = '修改';
                 editBtn.onclick = async () => {
                     try {
-                        const unlocked2 = await unlockEntry(item.code, '请输入解密密钥以载入该订阅的配置。', '载入');
+                        const unlocked2 = await unlockEntry(item.code, '请输入访问口令以载入该订阅的配置。', '载入');
                         if (!unlocked2) return;
-                        fillFormFromParams(unlocked2.obj.params);
+                        fillFormFromParams(unlocked2.resp);
                         editingCode = item.code;
-                        editingLabel = unlocked2.obj.label || '';
+                        editingLabel = unlocked2.resp.label || '';
                         editingOldKey = unlocked2.key;
                         renderSavedList(currentSavedItems);
                         showToast('✓ 已载入，保存将更新该短链接', 'success');
                     } catch {
-                        showToast('✗ 解密密钥错误', 'error');
+                        showToast('✗ 访问口令错误', 'error');
                     }
                 };
                 const clearBtn = document.createElement('button');
@@ -1048,10 +1042,10 @@ export async function getFakePage(e) {
                 clearBtn.innerText = '清除';
                 clearBtn.onclick = async () => {
                     try {
-                        // 已解锁条目自动携带会话内已验证的密钥，免重复输入
+                        // 已解锁条目自动携带会话内已验证的口令，免重复输入
                         let clearKey = unlockedKeys.get(item.code);
                         if (!clearKey) {
-                            const r = await unlockEntry(item.code, '请输入解密密钥以清除该订阅的缓存内容。', '清除');
+                            const r = await unlockEntry(item.code, '请输入访问口令以清除该订阅的缓存内容。', '清除');
                             if (!r) return;
                             clearKey = r.key;
                         }
@@ -1062,15 +1056,11 @@ export async function getFakePage(e) {
                         });
                         const data = await resp.json();
                         if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error || '清除失败');
-                        const u = unlockedInfo.get(item.code);
-                        if (u) {
-                            delete u.content;
-                            delete u.textHeaders;
-                        }
-                        renderSavedList(currentSavedItems);
+                        unlockedInfo.delete(item.code);
+                        await loadSavedList(savedPager.page);
                         showToast('✓ 已清除，下次访问将重新生成', 'success');
                     } catch (err) {
-                        showToast(\`✗ \${err.message || '解密密钥错误'}\`, 'error');
+                        showToast(\`✗ \${err.message || '访问口令错误'}\`, 'error');
                     }
                 };
                 actions.append(copyBtn, editBtn, clearBtn);
@@ -1079,9 +1069,9 @@ export async function getFakePage(e) {
             });
         }
 
-        // 将保存的参数回填到表单
-        function fillFormFromParams(params) {
-            const modeId = params.target;
+        // 将保存的配置回填到表单（resp = /api/short/get 响应）
+        function fillFormFromParams(resp) {
+            const modeId = resp.target;
             if (!MODES_META[modeId]) return;
             const modeOpt = document.querySelector(\`#modeDropdown .template-opt[data-mode-id="\${modeId}"]\`);
             if (modeOpt) modeOpt.click();
@@ -1089,13 +1079,23 @@ export async function getFakePage(e) {
             const wrapper = document.getElementById(\`links-wrapper-\${modeId}\`);
             if (wrapper) {
                 wrapper.innerHTML = '';
-                const urls = String(params.url || '').split(',').filter(Boolean);
-                urls.forEach(() => addLinkRow(\`links-wrapper-\${modeId}\`, modeId));
+                (resp.sources || []).forEach((s) => {
+                    if (!s.name) {
+                        showToast(\`⚠️ 原始订阅（\${String(s.id).slice(0, 8)}…）已删除，已跳过\`, 'error');
+                        return;
+                    }
+                    addLinkRow(\`links-wrapper-\${modeId}\`, modeId);
+                    const row = wrapper.lastElementChild;
+                    setRowSource(row, s);
+                });
+                (resp.rawUrls || []).forEach(() => addLinkRow(\`links-wrapper-\${modeId}\`, modeId));
                 const inputs = wrapper.querySelectorAll('.dynamic-link-input');
-                urls.forEach((u, i) => {
-                    if (inputs[i]) inputs[i].value = u;
+                let idx = 0;
+                (resp.rawUrls || []).forEach((u) => {
+                    if (inputs[idx]) inputs[idx++].value = u;
                 });
             }
+            const params = resp.params || {};
 
             const container = document.getElementById(\`panel-\${modeId}\`);
             if (!container) return;
@@ -1128,8 +1128,7 @@ export async function getFakePage(e) {
         async function generateConfigForMode(modeId) {
             const container = document.getElementById(\`panel-\${modeId}\`);
             if (!container) return;
-            const linkInputs = container.querySelectorAll('.dynamic-link-input');
-            const links = Array.from(linkInputs).map(inp => inp.value.trim()).filter(v => v !== "");
+            const { sources, rawUrls } = collectLinkRows(container);
             let templateVal = '';
             const selectedTmpl = container.querySelector('.template-opt.selected');
             if (selectedTmpl) templateVal = selectedTmpl.dataset.value;
@@ -1145,15 +1144,14 @@ export async function getFakePage(e) {
                     protocolParams[protoName] = select.value;
                 }
             });
-            if (links.length === 0) {
-                alert('请至少填写一个订阅链接');
+            if (!sources.length && !rawUrls.length) {
+                alert('请至少填写一个订阅链接或选择一个已保存的原始订阅');
                 return;
             }
 
             const origin = window.location.origin;
             const params = new URLSearchParams();
             if (templateVal) params.set('template', templateVal);
-            if (links.length) params.set('url', links.join(','));
             params.set('target', modeId);
             // 统一设置参数
             for (const [key, value] of Object.entries(protocolParams)) {
@@ -1164,7 +1162,17 @@ export async function getFakePage(e) {
                 }
             }
 
-            const fullUrl = \`\${origin}/?\${params.toString()}\`;
+            // 生成的完整参数（保存短链用）；直接链接仅由裸 URL 构成（已入库源以名称提示）
+            window.lastGen = { sources: sources.map((s) => s.id), rawUrls, target: modeId, params: Object.fromEntries(params.entries()) };
+            let fullUrl = '';
+            if (!sources.length) {
+                const displayParams = new URLSearchParams(params);
+                displayParams.set('url', rawUrls.join(','));
+                fullUrl = \`\${origin}/?\${displayParams.toString()}\`;
+            } else {
+                fullUrl = \`\${origin}/?target=\${modeId}&src=\${encodeURIComponent(sources.map((s) => s.name).join(','))}\`;
+                showToast('含已入库订阅源，直接链接不可用，请使用「🔒 保存订阅内容」生成短链接', 'success');
+            }
 
             updateResultAndQR(fullUrl);
 
