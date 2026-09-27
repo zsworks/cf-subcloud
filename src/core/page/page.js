@@ -1375,7 +1375,7 @@ export async function getFakePage(e) {
                 const resp = await fetch('/api/source/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url, name }),
+                    body: JSON.stringify({ url, name, target: currentMode }),
                 });
                 const data = await resp.json();
                 if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error || '保存失败');

@@ -2,11 +2,11 @@ import { buildConfig } from '../env.js';
 import { handleRequest } from '../handler.js';
 import { getKeys, encryptBlob, decryptBlob, hmacB64url, timingSafeEqual, base64ToBytes } from './crypto.js';
 import { getSource, refreshSource } from './sources.js';
+import { UA_MAP } from './ua.js';
 
 const CODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const CODE_LENGTH = 8;
-// 各 target 对应的合法客户端 UA（绕过 CHECKUA 校验）
-const UA_MAP = { mihomo: 'clash-verge/2.0', singbox: 'sing-box/1.12.0', v2ray: 'v2rayN/6.0' };
+// UA_MAP：各 target 对应的合法客户端 UA（绕过 CHECKUA 校验），定义见 ua.js
 // 源 id 为 base64url(HMAC-SHA256) = 43 字符
 const ID_RE = /^[A-Za-z0-9_-]{40,64}$/;
 

@@ -1,6 +1,7 @@
 import { saveSource, listSources, refreshSource, deleteSource } from './sources.js';
 import { saveLink, listLinks, getLink, clearLink, serveLink } from './links.js';
 import { base64ToBytes } from './crypto.js';
+import { resolveSourceUa } from './ua.js';
 
 const ID_RE = /^[A-Za-z0-9_-]{40,64}$/;
 
@@ -24,11 +25,12 @@ export async function handleShortLink(request, env) {
 
     if (path === '/api/source/save' && request.method === 'POST') {
         if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
-        const { url: sourceUrl, name } = await request.json();
+        const { url: sourceUrl, name, target } = await request.json();
         if (!sourceUrl || !/^https?:\/\//.test(String(sourceUrl))) throw new Error('无效的订阅地址');
         const cleanName = typeof name === 'string' && name.trim() ? name.trim().slice(0, 30) : '';
         if (!cleanName) throw new Error('请输入订阅名称');
-        const r = await saveSource(db, env, String(sourceUrl), cleanName);
+        // 按当前客户端类型选择拉取 UA（白名单映射，未知 target 走默认）
+        const r = await saveSource(db, env, String(sourceUrl), cleanName, resolveSourceUa(typeof target === 'string' ? target : ''));
         return jsonResponse({ success: true, ...r });
     }
     if (path === '/api/source/list' && request.method === 'GET') {

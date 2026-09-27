@@ -3129,7 +3129,7 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=fx.generate
                 const resp = await fetch('/api/source/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url, name }),
+                    body: JSON.stringify({ url, name, target: currentMode }),
                 });
                 const data = await resp.json();
                 if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error || '\u4FDD\u5B58\u5931\u8D25');

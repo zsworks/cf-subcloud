@@ -1,9 +1,10 @@
 // 测试用内存 D1 mock，仅覆盖 shortlink 模块使用的 SQL 形态
-export function createMockD1({ legacy = false } = {}) {
+export function createMockD1({ legacy = false, legacySources = false } = {}) {
     const state = {
         sub_sources: [],
         short_links: legacy ? [{ code: 'old00000', salt: 's', blob: 'b', created: 1 }] : [],
         legacy,
+        legacySources,
     };
     const norm = (sql) => sql.replace(/\s+/g, ' ').trim();
     function exec(sql, args) {
@@ -14,9 +15,17 @@ export function createMockD1({ legacy = false } = {}) {
             state.legacy = false;
             return null;
         }
+        if (/^ALTER TABLE sub_sources ADD COLUMN ua TEXT NOT NULL DEFAULT 'v2ray'$/.test(s)) {
+            state.legacySources = false;
+            return null;
+        }
+        if (/^SELECT ua FROM sub_sources LIMIT 1$/.test(s)) {
+            if (state.legacySources) throw new Error('no such column: ua');
+            return state.sub_sources[0] || null;
+        }
         if (/^INSERT INTO sub_sources/.test(s)) {
-            const [id, name, blob, fetchedAt] = args;
-            const row = { id, name, blob, fetched_at: fetchedAt };
+            const [id, name, blob, fetchedAt, ua] = args;
+            const row = { id, name, blob, fetched_at: fetchedAt, ua: ua ?? 'v2ray' };
             const i = state.sub_sources.findIndex((r) => r.id === id);
             if (i >= 0) state.sub_sources[i] = row;
             else state.sub_sources.push(row);

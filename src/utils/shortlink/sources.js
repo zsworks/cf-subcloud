@@ -1,9 +1,10 @@
 import YAML from 'yaml';
 import { fetchResponse } from '../fetchResponse.js';
 import { getKeys, encryptBlob, decryptBlob, hmacB64url } from './crypto.js';
+import { DEFAULT_SOURCE_UA } from './ua.js';
 
 const readyDbs = new WeakSet();
-// 惰性建表（按 db 实例记忆）；URL 与上游内容全部加密存于 blob，仅名称与时间明文
+// 惰性建表（按 db 实例记忆）；URL 与上游内容全部加密存于 blob，仅名称/时间/UA 明文
 export async function ensureSourceTable(db) {
     if (readyDbs.has(db)) return;
     await db
@@ -12,35 +13,43 @@ export async function ensureSourceTable(db) {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         blob TEXT NOT NULL,
-        fetched_at INTEGER NOT NULL
+        fetched_at INTEGER NOT NULL,
+        ua TEXT NOT NULL DEFAULT '${DEFAULT_SOURCE_UA}'
     )`,
         )
         .run();
+    try {
+        await db.prepare('SELECT ua FROM sub_sources LIMIT 1').first();
+    } catch {
+        // 旧表无 ua 列：补列，历史行取默认值
+        await db.prepare(`ALTER TABLE sub_sources ADD COLUMN ua TEXT NOT NULL DEFAULT '${DEFAULT_SOURCE_UA}'`).run();
+    }
     readyDbs.add(db);
 }
 
-// 实时拉上游（v2ray UA，base64 兼容性最好）；失败 throw，调用方不入库
-async function fetchSourceContent(url) {
-    const res = await fetchResponse(url, 'v2ray');
+// 实时拉上游，UA 按保存该订阅时的客户端类型；失败 throw，调用方不入库
+async function fetchSourceContent(url, ua) {
+    const res = await fetchResponse(url, ua || DEFAULT_SOURCE_UA);
     if (!res || res.error) throw new Error(`拉取原始订阅失败：${res?.error?.message || '网络错误'}`);
     if (res.status !== 200 || !res.data) throw new Error(`拉取原始订阅失败：HTTP ${res.status || 0}`);
     const content = typeof res.data === 'string' ? res.data : YAML.stringify(res.data);
     return { content, headers: res.headers || {} };
 }
 
-export async function saveSource(db, env, url, name) {
+export async function saveSource(db, env, url, name, ua) {
     await ensureSourceTable(db);
     const srcUrl = new URL(url);
-    const { content, headers } = await fetchSourceContent(srcUrl.href);
+    const safeUa = typeof ua === 'string' && ua ? ua.slice(0, 64) : DEFAULT_SOURCE_UA;
+    const { content, headers } = await fetchSourceContent(srcUrl.href, safeUa);
     const { encKey, hmacKey } = await getKeys(env);
     const id = await hmacB64url(srcUrl.href, hmacKey);
     const blob = await encryptBlob({ url: srcUrl.href, content, headers }, encKey);
     await db
         .prepare(
-            `INSERT INTO sub_sources (id, name, blob, fetched_at) VALUES (?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET name = excluded.name, blob = excluded.blob, fetched_at = excluded.fetched_at`,
+            `INSERT INTO sub_sources (id, name, blob, fetched_at, ua) VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET name = excluded.name, blob = excluded.blob, fetched_at = excluded.fetched_at, ua = excluded.ua`,
         )
-        .bind(id, name, blob, Date.now())
+        .bind(id, name, blob, Date.now(), safeUa)
         .run();
     return { id, name };
 }
@@ -57,13 +66,13 @@ export async function getSource(db, env, id) {
     if (!row) return null;
     const { encKey } = await getKeys(env);
     const obj = await decryptBlob(row.blob, encKey);
-    return { id: row.id, name: row.name, url: obj.url, content: obj.content, headers: obj.headers || {}, fetchedAt: row.fetched_at };
+    return { id: row.id, name: row.name, url: obj.url, content: obj.content, headers: obj.headers || {}, fetchedAt: row.fetched_at, ua: row.ua || DEFAULT_SOURCE_UA };
 }
 
 export async function refreshSource(db, env, id) {
     const src = await getSource(db, env, id);
     if (!src) return null;
-    const { content, headers } = await fetchSourceContent(src.url);
+    const { content, headers } = await fetchSourceContent(src.url, src.ua);
     const { encKey } = await getKeys(env);
     const blob = await encryptBlob({ url: src.url, content, headers }, encKey);
     const now = Date.now();

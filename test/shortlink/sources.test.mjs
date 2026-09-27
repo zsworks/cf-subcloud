@@ -102,3 +102,37 @@ test('不同 URL 的 id 不同（去重键正确）', async (t) => {
     assert.notEqual(a.id, b.id);
     assert.equal((await listSources(db)).length, 2);
 });
+
+test('saveSource 按客户端类型使用对应 UA；refresh 沿用入库 UA；未指定走默认', async (t) => {
+    const realFetch = global.fetch;
+    const seenUas = [];
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    global.fetch = async (url, init = {}) => {
+        seenUas.push(init.headers?.['User-Agent'] || null);
+        return new Response(SAMPLE_B64_SUB, { status: 200 });
+    };
+
+    const db = createMockD1();
+    const env = createEnv(db);
+
+    // 未指定 target：默认 v2ray
+    const r1 = await saveSource(db, env, URL_A, '机场A');
+    // mihomo：clash UA
+    const r2 = await saveSource(db, env, URL_B, '机场B', 'clash-verge/2.0');
+    assert.deepEqual(seenUas, ['v2ray', 'clash-verge/2.0']);
+    assert.equal((await getSource(db, env, r1.id)).ua, 'v2ray');
+    assert.equal((await getSource(db, env, r2.id)).ua, 'clash-verge/2.0');
+
+    // 刷新沿用各自入库的 UA
+    await refreshSource(db, env, r2.id);
+    assert.equal(seenUas[2], 'clash-verge/2.0');
+});
+
+test('旧表（无 ua 列）自动补列迁移', async () => {
+    const db = createMockD1({ legacySources: true });
+    // 触发 ensureSourceTable：探测失败 → ALTER 补列 → 正常工作
+    const items = await listSources(db);
+    assert.deepEqual(items, []);
+});
