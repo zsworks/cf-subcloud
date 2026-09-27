@@ -85,15 +85,16 @@ export async function getSource(db, env, id) {
     return { id: row.id, name: row.name, url: obj.url, content: obj.content, headers: obj.headers || {}, fetchedAt: row.fetched_at, ua: row.ua || DEFAULT_SOURCE_UA };
 }
 
-export async function refreshSource(db, env, id) {
+export async function refreshSource(db, env, id, uaOverride) {
     const src = await getSource(db, env, id);
     if (!src) return null;
-    const { content, headers } = await fetchSourceContent(src.url, src.ua);
+    const ua = typeof uaOverride === 'string' && uaOverride.trim() ? uaOverride.trim().slice(0, 64) : src.ua;
+    const { content, headers } = await fetchSourceContent(src.url, ua);
     const { encKey } = await getKeys(env);
     const blob = await encryptBlob({ url: src.url, content, headers }, encKey);
     const now = Date.now();
-    await db.prepare('UPDATE sub_sources SET blob = ?, fetched_at = ? WHERE id = ?').bind(blob, now, id).run();
-    return { id, name: src.name, fetchedAt: now };
+    await db.prepare('UPDATE sub_sources SET blob = ?, fetched_at = ?, ua = ? WHERE id = ?').bind(blob, now, ua, id).run();
+    return { id, name: src.name, fetchedAt: now, ua };
 }
 
 export async function deleteSource(db, id) {

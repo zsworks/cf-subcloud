@@ -27,6 +27,11 @@ export function buildConfig(request, env, isNode = false) {
     if (urlParam && urlParam.trim()) {
         data.urls = splitUrlsAndProxies(urlParam.split(',').map((u) => u.trim()));
     }
+    // 按名称直连原始订阅库（worker 端解析为库内缓存内容）
+    const srcParam = getParam('src');
+    if (srcParam && srcParam.trim()) {
+        data.src = srcParam.split(',').map((s) => s.trim()).filter(Boolean);
+    }
     const target = getParam('target');
     if (target) data.target = target;
     const log = getParam('log');

@@ -85,9 +85,9 @@ export async function handleShortLink(request, env) {
     }
     if (path === '/api/source/refresh' && request.method === 'POST') {
         if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
-        const { id } = await request.json();
+        const { id, ua } = await request.json();
         if (!id || !ID_RE.test(String(id))) throw new Error('无效的订阅 ID');
-        const r = await refreshSource(db, env, String(id));
+        const r = await refreshSource(db, env, String(id), typeof ua === 'string' ? ua : undefined);
         if (!r) return notFound('原始订阅不存在');
         return jsonResponse({ success: true, ...r });
     }

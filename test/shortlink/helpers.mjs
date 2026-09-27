@@ -66,6 +66,15 @@ export function createMockD1({ legacy = false, legacySources = false } = {}) {
             if (row) row.name = args[0];
             return null;
         }
+        if (/^UPDATE sub_sources SET blob = \?, fetched_at = \?, ua = \? WHERE id = \?$/.test(s)) {
+            const row = state.sub_sources.find((r) => r.id === args[3]);
+            if (row) {
+                row.blob = args[0];
+                row.fetched_at = args[1];
+                row.ua = args[2];
+            }
+            return null;
+        }
         if (/^UPDATE sub_sources SET blob = \?, fetched_at = \? WHERE id = \?$/.test(s)) {
             const row = state.sub_sources.find((r) => r.id === args[2]);
             if (row) {
