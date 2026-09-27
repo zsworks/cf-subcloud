@@ -5,6 +5,7 @@ import { createMockD1, createEnv, SAMPLE_B64_SUB } from './helpers.mjs';
 import { saveLink, serveLink } from '../../src/utils/shortlink/links.js';
 import { saveSource, getSource, refreshSource, deleteSource } from '../../src/utils/shortlink/sources.js';
 import { getKeys, encryptBlob, decryptBlob } from '../../src/utils/shortlink/crypto.js';
+import { configureAssetFetcher } from '../../src/utils/assetsFetch.js';
 
 const realFetch = global.fetch;
 
@@ -21,8 +22,11 @@ async function stubUpstream(t, { template = 'rules: []' } = {}) {
         }
         return new Response(template, { status: 200, headers: { 'Content-Type': 'text/yaml' } });
     };
+    // 相对模板走 ASSETS 进程内读取（与生产一致）
+    configureAssetFetcher(async () => new Response(template, { status: 200, headers: { 'Content-Type': 'text/yaml' } }));
     t.after(() => {
         global.fetch = realFetch;
+        configureAssetFetcher(null);
     });
 }
 

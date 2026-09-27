@@ -140,6 +140,16 @@ export async function clearLink(db, env, code, key) {
     return true;
 }
 
+export async function deleteLink(db, env, code, key) {
+    await ensureShortLinkTable(db);
+    const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(code).first();
+    if (!row) return { notFound: true };
+    const { hmacKey } = await getKeys(env);
+    if (!(await verifyPw(row.pw_hash, key, hmacKey))) throw new Error('访问口令错误');
+    await db.prepare('DELETE FROM short_links WHERE code = ?').bind(code).run();
+    return true;
+}
+
 // 生成缓存是否仍新鲜：srcFetched 快照与各源当前 fetched_at 一致；
 // 源已删除（不在 fetchedMap）视为新鲜——已有缓存仍可服务
 export function isCacheFresh(obj, fetchedMap) {

@@ -31,7 +31,9 @@ export async function ensureSourceTable(db) {
 async function fetchSourceContent(url, ua) {
     const res = await fetchResponse(url, ua || DEFAULT_SOURCE_UA);
     if (!res || res.error) throw new Error(`拉取原始订阅失败：${res?.error?.message || '网络错误'}`);
-    if (res.status !== 200 || !res.data) throw new Error(`拉取原始订阅失败：HTTP ${res.status || 0}`);
+    if (res.status !== 200 || !res.data) {
+        throw new Error(`拉取原始订阅失败：HTTP ${res.status || 0}（${res.via === 'relay' ? '经中转' : '直连'}）`);
+    }
     const content = typeof res.data === 'string' ? res.data : YAML.stringify(res.data);
     return { content, headers: res.headers || {} };
 }
@@ -41,15 +43,29 @@ export async function saveSource(db, env, url, name, ua) {
     const srcUrl = new URL(url);
     const safeUa = typeof ua === 'string' && ua ? ua.slice(0, 64) : DEFAULT_SOURCE_UA;
     const { content, headers } = await fetchSourceContent(srcUrl.href, safeUa);
+    return upsertSource(db, env, srcUrl.href, name, safeUa, content, headers);
+}
+
+// 本机导入：内容已由调用方在自己网络拉好，服务端只负责加密入库
+// （部分机场 WAF 封禁全部数据中心出口，云端无法代拉，只能由用户本机拉取后推送）
+export async function importSource(db, env, url, name, ua, content, headers = {}) {
+    await ensureSourceTable(db);
+    const srcUrl = new URL(url);
+    if (!content || typeof content !== 'string') throw new Error('缺少订阅内容');
+    const safeUa = typeof ua === 'string' && ua ? ua.slice(0, 64) : DEFAULT_SOURCE_UA;
+    return upsertSource(db, env, srcUrl.href, name, safeUa, content, headers);
+}
+
+async function upsertSource(db, env, url, name, ua, content, headers) {
     const { encKey, hmacKey } = await getKeys(env);
-    const id = await hmacB64url(srcUrl.href, hmacKey);
-    const blob = await encryptBlob({ url: srcUrl.href, content, headers }, encKey);
+    const id = await hmacB64url(url, hmacKey);
+    const blob = await encryptBlob({ url, content, headers }, encKey);
     await db
         .prepare(
             `INSERT INTO sub_sources (id, name, blob, fetched_at, ua) VALUES (?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET name = excluded.name, blob = excluded.blob, fetched_at = excluded.fetched_at, ua = excluded.ua`,
         )
-        .bind(id, name, blob, Date.now(), safeUa)
+        .bind(id, name, blob, Date.now(), ua)
         .run();
     return { id, name };
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockD1, createEnv, SAMPLE_B64_SUB } from './helpers.mjs';
-import { saveSource, listSources, getSource, refreshSource, deleteSource } from '../../src/utils/shortlink/sources.js';
+import { saveSource, importSource, listSources, getSource, refreshSource, deleteSource } from '../../src/utils/shortlink/sources.js';
 import { getKeys, hmacB64url } from '../../src/utils/shortlink/crypto.js';
 
 const URL_A = 'https://airport-a.example/sub?token=aaa';
@@ -135,4 +135,28 @@ test('旧表（无 ua 列）自动补列迁移', async () => {
     // 触发 ensureSourceTable：探测失败 → ALTER 补列 → 正常工作
     const items = await listSources(db);
     assert.deepEqual(items, []);
+});
+
+test('importSource 不经网络直接入库，刷新时按 target UA 服务端拉取', async (t) => {
+    const realFetch = global.fetch;
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    global.fetch = stubFetch({ 'airport-a.example': SAMPLE_B64_SUB });
+
+    const db = createMockD1();
+    const env = createEnv(db);
+    // 导入：内容已在本机拉好
+    const { id } = await importSource(db, env, URL_A, '本机导入', 'clash-verge/2.0', 'manual-content', { 'content-type': 'text/yaml' });
+    const src = await getSource(db, env, id);
+    assert.equal(src.content, 'manual-content');
+    assert.equal(src.ua, 'clash-verge/2.0');
+
+    // 刷新：服务端按入库 UA 自己拉
+    const r = await refreshSource(db, env, id);
+    assert.ok(r.fetchedAt > 0);
+    assert.equal((await getSource(db, env, id)).content, SAMPLE_B64_SUB);
+
+    // 缺内容报错
+    await assert.rejects(() => importSource(db, env, URL_B, 'B', '', ''), /缺少订阅内容/);
 });

@@ -1,4 +1,5 @@
 import { splitUrlsAndProxies, backimg, beiantext, beiandizi, isUrl } from './index.js';
+import { ASSET_MARKER } from './assetsFetch.js';
 export function buildConfig(request, env, isNode = false) {
     const url = isNode ? new URL(request.url, `http://${request.headers.host}`) : new URL(request.url);
 
@@ -74,8 +75,11 @@ export function buildConfig(request, env, isNode = false) {
     if (template && !isUrl(template)) {
         if (templateBaseUrl) {
             data.rule = `${templateBaseUrl}/${data.target}${template}`;
+        } else if (isNode) {
+            data.rule = `${url.origin}/template/${data.target}${template}`;
         } else {
-            data.rule = `${url.origin}${isNode ? '/template' : ''}/${data.target}${template}`;
+            // CF Worker：静态模板经 ASSETS 绑定进程内读取（subrequest 自域名会被 Bot 防护挑战）
+            data.rule = `${ASSET_MARKER}/${data.target}${template}`;
         }
     } else {
         data.rule = template;
