@@ -3,6 +3,9 @@ name = "cf-subcloud"
 main = "dist/_worker.js"
 compatibility_date = "2026-07-09"
 compatibility_flags = ["nodejs_compat"]
+routes = [
+    { pattern = "ss.zworks.me", custom_domain = true },
+]
 [assets]
 directory = "./template"
 binding = "ASSETS"
