@@ -100,3 +100,13 @@ export async function deleteSource(db, id) {
     await ensureSourceTable(db);
     await db.prepare('DELETE FROM sub_sources WHERE id = ?').bind(id).run();
 }
+
+// 改名仅更新展示名称，内容与 UA 不动
+export async function renameSource(db, env, id, name) {
+    const src = await getSource(db, env, id);
+    if (!src) return null;
+    const cleanName = typeof name === 'string' && name.trim() ? name.trim().slice(0, 30) : '';
+    if (!cleanName) throw new Error('请输入订阅名称');
+    await db.prepare('UPDATE sub_sources SET name = ? WHERE id = ?').bind(cleanName, id).run();
+    return { id, name: cleanName };
+}

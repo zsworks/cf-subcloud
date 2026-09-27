@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockD1, createEnv, SAMPLE_B64_SUB } from './helpers.mjs';
-import { saveSource, importSource, listSources, getSource, refreshSource, deleteSource } from '../../src/utils/shortlink/sources.js';
+import { saveSource, importSource, listSources, getSource, refreshSource, deleteSource, renameSource } from '../../src/utils/shortlink/sources.js';
 import { getKeys, hmacB64url } from '../../src/utils/shortlink/crypto.js';
 
 const URL_A = 'https://airport-a.example/sub?token=aaa';
@@ -137,8 +137,29 @@ test('旧表（无 ua 列）自动补列迁移', async () => {
     assert.deepEqual(items, []);
 });
 
-test('importSource 不经网络直接入库，刷新时按 target UA 服务端拉取', async (t) => {
+test('renameSource 改名不影响内容；空名报错；源不存在返回 null', async (t) => {
     const realFetch = global.fetch;
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    global.fetch = stubFetch({ 'airport-a.example': SAMPLE_B64_SUB });
+
+    const db = createMockD1();
+    const env = createEnv(db);
+    const { id } = await saveSource(db, env, URL_A, '旧名字');
+    const before = await getSource(db, env, id);
+
+    const r = await renameSource(db, env, id, '  新名字  ');
+    assert.equal(r.name, '新名字');
+    const after = await getSource(db, env, id);
+    assert.equal(after.name, '新名字');
+    assert.equal(after.content, before.content, '改名不应触碰内容');
+
+    await assert.rejects(() => renameSource(db, env, id, '   '), /请输入订阅名称/);
+    assert.equal(await renameSource(db, env, 'nonexistent', 'X'), null);
+});
+
+test('importSource 不经网络直接入库，刷新时按 target UA 服务端拉取', async (t) => {    const realFetch = global.fetch;
     t.after(() => {
         global.fetch = realFetch;
     });

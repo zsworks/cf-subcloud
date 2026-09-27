@@ -61,6 +61,11 @@ export function createMockD1({ legacy = false, legacySources = false } = {}) {
             const rows = [...state.short_links].sort((a, b) => b.created - a.created || (a.code < b.code ? -1 : 1));
             return rows.slice(args[1], args[1] + args[0]).map((r) => ({ code: r.code, created: r.created }));
         }
+        if (/^UPDATE sub_sources SET name = \? WHERE id = \?$/.test(s)) {
+            const row = state.sub_sources.find((r) => r.id === args[1]);
+            if (row) row.name = args[0];
+            return null;
+        }
         if (/^UPDATE sub_sources SET blob = \?, fetched_at = \? WHERE id = \?$/.test(s)) {
             const row = state.sub_sources.find((r) => r.id === args[2]);
             if (row) {

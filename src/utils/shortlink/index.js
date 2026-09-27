@@ -1,4 +1,4 @@
-import { saveSource, importSource, listSources, refreshSource, deleteSource } from './sources.js';
+import { saveSource, importSource, listSources, refreshSource, deleteSource, renameSource } from './sources.js';
 import { saveLink, listLinks, getLink, clearLink, deleteLink, serveLink } from './links.js';
 import { base64ToBytes } from './crypto.js';
 import { resolveSourceUa } from './ua.js';
@@ -88,6 +88,14 @@ export async function handleShortLink(request, env) {
         const { id } = await request.json();
         if (!id || !ID_RE.test(String(id))) throw new Error('无效的订阅 ID');
         const r = await refreshSource(db, env, String(id));
+        if (!r) return notFound('原始订阅不存在');
+        return jsonResponse({ success: true, ...r });
+    }
+    if (path === '/api/source/rename' && request.method === 'POST') {
+        if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
+        const { id, name } = await request.json();
+        if (!id || !ID_RE.test(String(id))) throw new Error('无效的订阅 ID');
+        const r = await renameSource(db, env, String(id), name);
         if (!r) return notFound('原始订阅不存在');
         return jsonResponse({ success: true, ...r });
     }

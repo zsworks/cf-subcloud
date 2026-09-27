@@ -1043,76 +1043,6 @@ function homePageHtml(e, configJson) {
 
 
         // ===== 原始订阅库管理 =====
-        async function loadSourceLibrary() {
-            const box = document.getElementById('sourceList');
-            const card = document.getElementById('sourceCard');
-            if (!box) return;
-            // 未保存任何原始订阅时整卡隐藏，保持默认界面简洁
-            if (card) card.style.display = 'none';
-            try {
-                const resp = await fetch('/api/source/list');
-                const data = await resp.json();
-                if (!resp.ok || !data.success) throw new Error(data.error);
-                box.innerHTML = '';
-                const items = data.items || [];
-                if (!items.length) return;
-                if (card) card.style.display = '';
-                items.forEach((s) => {
-                    const row = document.createElement('div');
-                    row.className = 'saved-item';
-                    const time = s.fetchedAt ? new Date(s.fetchedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-                    const info = document.createElement('div');
-                    info.className = 'saved-info';
-                    info.innerHTML = \`<span class="saved-mode">🗃️ \${s.name}</span><span class="saved-meta">\${time} 拉取 · 内容加密存储</span>\`;
-                    const actions = document.createElement('div');
-                    actions.className = 'saved-actions';
-                    const refreshBtn = document.createElement('button');
-                    refreshBtn.className = 'saved-btn';
-                    refreshBtn.innerText = '刷新';
-                    refreshBtn.onclick = async () => {
-                        try {
-                            refreshBtn.disabled = true;
-                            const r = await fetch('/api/source/refresh', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: s.id }),
-                            }).then((x) => x.json());
-                            if (!r.success) throw new Error(r.error || '刷新失败');
-                            showToast(\`✓ 已刷新「\${s.name}」，相关短链将自动重新生成\`, 'success');
-                            loadSourceLibrary();
-                        } catch (err) {
-                            showToast(\`✗ \${err.message}\`, 'error');
-                        } finally {
-                            refreshBtn.disabled = false;
-                        }
-                    };
-                    const delBtn = document.createElement('button');
-                    delBtn.className = 'saved-btn saved-btn-danger';
-                    delBtn.innerText = '删除';
-                    delBtn.onclick = async () => {
-                        if (!confirm(\`删除原始订阅「\${s.name}」？已生成缓存的短链仍可访问，但无法重新生成。\`)) return;
-                        try {
-                            const r = await fetch('/api/source/delete', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: s.id }),
-                            }).then((x) => x.json());
-                            if (!r.success) throw new Error(r.error || '删除失败');
-                            showToast('✓ 已删除', 'success');
-                            loadSourceLibrary();
-                        } catch (err) {
-                            showToast(\`✗ \${err.message}\`, 'error');
-                        }
-                    };
-                    actions.append(refreshBtn, delBtn);
-                    row.append(info, actions);
-                    box.appendChild(row);
-                });
-            } catch (err) {
-                box.innerHTML = '';
-                console.warn('原始订阅库不可用', err.message);
-            }
-        }
 
         async function generateConfigForMode(modeId) {
             const container = document.getElementById(\`panel-\${modeId}\`);
@@ -1947,6 +1877,30 @@ function sourcesPageHtml(e) {
                     info.innerHTML = \`<span class="saved-mode">🗃️ \${s.name}</span><span class="saved-meta">\${time} 拉取 · 内容加密存储</span>\`;
                     const actions = document.createElement('div');
                     actions.className = 'saved-actions';
+                    const renameBtn = document.createElement('button');
+                    renameBtn.className = 'saved-btn';
+                    renameBtn.innerText = '改名';
+                    renameBtn.onclick = async () => {
+                        const name = prompt(\`修改「\${s.name}」的名称：\`, s.name);
+                        if (name === null) return;
+                        const clean = name.trim();
+                        if (!clean || clean === s.name) return;
+                        try {
+                            renameBtn.disabled = true;
+                            const r = await fetch('/api/source/rename', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: s.id, name: clean }),
+                            }).then((x) => x.json());
+                            if (!r.success) throw new Error(r.error || '改名失败');
+                            showToast('✓ 已改名', 'success');
+                            loadSourceLibrary();
+                        } catch (err) {
+                            showToast(\`✗ \${err.message}\`, 'error');
+                        } finally {
+                            renameBtn.disabled = false;
+                        }
+                    };
                     const refreshBtn = document.createElement('button');
                     refreshBtn.className = 'saved-btn';
                     refreshBtn.innerText = '刷新';
@@ -1985,7 +1939,7 @@ function sourcesPageHtml(e) {
                             showToast(\`✗ \${err.message}\`, 'error');
                         }
                     };
-                    actions.append(refreshBtn, delBtn);
+                    actions.append(renameBtn, refreshBtn, delBtn);
                     row.append(info, actions);
                     box.appendChild(row);
                 });
