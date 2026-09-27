@@ -13,13 +13,14 @@ import { getNodeConversion } from './substore.js';
  * @param {boolean} sub - 是否为普通订阅模式
  * @param {string} target - 转换目标格式（如 clash、singbox 等）
  * @param {boolean} heruser - 获取流量信息
+ * @param {Array<string>|null} namePrefixes - 与 urls 平行的节点名前缀（src 直链的订阅代码）
  * @returns {Promise<any>} 处理后的订阅结果
  */
-export async function processSubscription(urls, userAgent, sub, target, heruser = false) {
+export async function processSubscription(urls, userAgent, sub, target, heruser = false, namePrefixes = null) {
     if (sub) {
         return await fetchWithFallback(urls, { userAgent, sub, target, heruser });
     }
 
     const proce = await getNodeConversion();
-    return await proce(urls, target, true, heruser);
+    return await proce(urls, target, true, heruser, namePrefixes);
 }

@@ -798,6 +798,8 @@ function homePageHtml(e, configJson) {
     <dialog id="nameDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; box-shadow: var(--shadow-md); position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; width: min(22rem, calc(100vw - 3rem));">
         <p id="nameDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
         <input type="text" id="nameDialogInput" placeholder="输入简短名称（如：机场A）"
+            style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center; margin-bottom: 0.7rem;" />
+        <input type="text" id="nameDialogCodeInput" placeholder="订阅代码（可选，如：YT，合并时作节点名前缀）"
             style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center; margin-bottom: 1.2rem;" />
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
             <button id="nameDialogCancel"
@@ -1124,16 +1126,18 @@ function homePageHtml(e, configJson) {
             setTimeout(() => toast.remove(), 2000);
         }
 
-        // 名称输入弹窗（原始订阅入库用）
-        function askName(message, prefill = '') {
+        // 名称输入弹窗（原始订阅入库用；第二个输入框为可选订阅代码）
+        function askName(message, prefill = '', codePrefill = '') {
             return new Promise((resolve) => {
                 const dlg = document.getElementById('nameDialog');
                 const msg = document.getElementById('nameDialogMsg');
                 const input = document.getElementById('nameDialogInput');
+                const codeInput = document.getElementById('nameDialogCodeInput');
                 const ok = document.getElementById('nameDialogOk');
                 const cancel = document.getElementById('nameDialogCancel');
                 msg.innerText = message;
                 input.value = prefill;
+                codeInput.value = codePrefill;
                 let settled = false;
                 const done = (val) => {
                     if (settled) return;
@@ -1141,12 +1145,19 @@ function homePageHtml(e, configJson) {
                     ok.onclick = null;
                     cancel.onclick = null;
                     input.onkeydown = null;
+                    codeInput.onkeydown = null;
                     dlg.close();
                     resolve(val);
                 };
-                ok.onclick = () => done(input.value.trim() || null);
+                const submit = () => {
+                    const name = input.value.trim();
+                    if (!name) return;
+                    done({ name, code: codeInput.value.trim() });
+                };
+                ok.onclick = submit;
                 cancel.onclick = () => done(null);
-                input.onkeydown = (ev) => { if (ev.key === 'Enter') done(input.value.trim() || null); };
+                input.onkeydown = (ev) => { if (ev.key === 'Enter') codeInput.focus(); };
+                codeInput.onkeydown = (ev) => { if (ev.key === 'Enter') submit(); };
                 dlg.showModal();
                 setTimeout(() => input.focus(), 50);
             });
@@ -1207,14 +1218,14 @@ function homePageHtml(e, configJson) {
                 showToast('✗ 请先输入有效的订阅链接', 'error');
                 return;
             }
-            const name = await askName('将实时拉取该订阅内容并加密保存到服务器，请输入一个简短名称以便后续选用。');
-            if (!name) return;
+            const picked = await askName('将实时拉取该订阅内容并加密保存到服务器，请输入一个简短名称以便后续选用。订阅代码可选，合并多个订阅时节点名会变为「代码_节点名」。');
+            if (!picked) return;
             try {
                 showToast('⏳ 正在拉取并保存原始订阅…', 'success');
                 const resp = await fetch('/api/source/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url, name, target: currentMode }),
+                    body: JSON.stringify({ url, name: picked.name, code: picked.code, target: currentMode }),
                 });
                 const data = await resp.json();
                 if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error || '保存失败');
@@ -1256,7 +1267,7 @@ function homePageHtml(e, configJson) {
                 items.forEach((s) => {
                     const item = document.createElement('div');
                     item.className = 'src-dd-item';
-                    item.innerText = \`🗃️ \${s.name}\`;
+                    item.innerText = \`🗃️ \${s.name}\${s.code ? ' · ' + s.code : ''}\`;
                     item.onclick = () => {
                         setRowSource(row, { id: s.id, name: s.name });
                         dd.remove();
@@ -1889,7 +1900,21 @@ function sourcesPageHtml(e) {
     const body = `        <div class="form-card">
             <div class="section-title">🗃️ 原始订阅库</div>
             <div id="sourceList" style="display: flex; flex-direction: column; gap: 8px;"></div>
-        </div>`;
+        </div>
+
+        <dialog id="srcEditDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; box-shadow: var(--shadow-md); position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; width: min(22rem, calc(100vw - 3rem));">
+            <p id="srcEditMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
+            <input type="text" id="srcEditName" placeholder="订阅名称"
+                style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center; margin-bottom: 0.7rem;" />
+            <input type="text" id="srcEditCode" placeholder="订阅代码（可选，合并时作节点名前缀）"
+                style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center; margin-bottom: 1.2rem;" />
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button id="srcEditCancel"
+                    style="border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">取消</button>
+                <button id="srcEditOk"
+                    style="border: none; background: var(--primary); color: #fff; border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">保存</button>
+            </div>
+        </dialog>`;
     const script = `function showToast(message, type = 'success') {
             const toast = document.createElement('div');
             toast.innerText = message;
@@ -1906,6 +1931,39 @@ function sourcesPageHtml(e) {
             toast.style.fontWeight = 'bold';
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 2000);
+        }
+
+        // 编辑弹窗：名称 + 订阅代码（代码全表唯一，留空表示不修改代码）
+        function openSrcEdit(item, onSaved) {
+            const dlg = document.getElementById('srcEditDialog');
+            const msg = document.getElementById('srcEditMsg');
+            const nameInput = document.getElementById('srcEditName');
+            const codeInput = document.getElementById('srcEditCode');
+            const ok = document.getElementById('srcEditOk');
+            const cancel = document.getElementById('srcEditCancel');
+            msg.innerText = \`编辑「\${item.name}」：\`;
+            nameInput.value = item.name;
+            codeInput.value = item.code || '';
+            let settled = false;
+            const done = (val) => {
+                if (settled) return;
+                settled = true;
+                ok.onclick = null;
+                cancel.onclick = null;
+                codeInput.onkeydown = null;
+                dlg.close();
+                if (val) onSaved(val);
+            };
+            const submit = () => {
+                const name = nameInput.value.trim();
+                if (!name) return;
+                done({ name, code: codeInput.value.trim() });
+            };
+            ok.onclick = submit;
+            cancel.onclick = () => done(null);
+            codeInput.onkeydown = (ev) => { if (ev.key === 'Enter') submit(); };
+            dlg.showModal();
+            setTimeout(() => nameInput.focus(), 50);
         }
 
         async function loadSourceLibrary() {
@@ -1926,32 +1984,31 @@ function sourcesPageHtml(e) {
                     const time = s.fetchedAt ? new Date(s.fetchedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
                     const info = document.createElement('div');
                     info.className = 'saved-info';
-                    info.innerHTML = \`<span class="saved-mode">🗃️ \${s.name}</span><span class="saved-meta">\${time} 拉取 · 内容加密存储</span>\`;
+                    info.innerHTML = \`<span class="saved-mode">🗃️ \${s.name}\${s.code ? \` <span style="font-size:0.72rem;color:var(--primary);font-weight:700;">[\${s.code}]</span>\` : ''}</span><span class="saved-meta">\${time} 拉取 · \${s.code ? '节点名前缀 ' + s.code + ' · ' : ''}内容加密存储</span>\`;
                     const actions = document.createElement('div');
                     actions.className = 'saved-actions';
                     const renameBtn = document.createElement('button');
                     renameBtn.className = 'saved-btn';
-                    renameBtn.innerText = '改名';
+                    renameBtn.innerText = '编辑';
                     renameBtn.onclick = async () => {
-                        const name = prompt(\`修改「\${s.name}」的名称：\`, s.name);
-                        if (name === null) return;
-                        const clean = name.trim();
-                        if (!clean || clean === s.name) return;
-                        try {
-                            renameBtn.disabled = true;
-                            const r = await fetch('/api/source/rename', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: s.id, name: clean }),
-                            }).then((x) => x.json());
-                            if (!r.success) throw new Error(r.error || '改名失败');
-                            showToast('✓ 已改名', 'success');
-                            loadSourceLibrary();
-                        } catch (err) {
-                            showToast(\`✗ \${err.message}\`, 'error');
-                        } finally {
-                            renameBtn.disabled = false;
-                        }
+                        openSrcEdit(s, async ({ name, code }) => {
+                            if (name === s.name && (code || '') === (s.code || '')) return;
+                            try {
+                                renameBtn.disabled = true;
+                                const r = await fetch('/api/source/rename', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ id: s.id, name, code }),
+                                }).then((x) => x.json());
+                                if (!r.success) throw new Error(r.error || '保存失败');
+                                showToast('✓ 已保存', 'success');
+                                loadSourceLibrary();
+                            } catch (err) {
+                                showToast(\`✗ \${err.message}\`, 'error');
+                            } finally {
+                                renameBtn.disabled = false;
+                            }
+                        });
                     };
                     const refreshBtn = document.createElement('button');
                     refreshBtn.className = 'saved-btn';

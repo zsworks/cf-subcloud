@@ -51,14 +51,18 @@ export default {
                     }
                 }
                 const items = await listSources(db);
-                const byName = new Map(items.map((i) => [i.name, i.id]));
+                const byName = new Map(items.map((i) => [i.name, i]));
                 const contents = [];
+                const prefixes = [];
                 for (const name of e.src) {
-                    const sid = byName.get(name);
-                    if (!sid) throw new Error(`原始订阅库中未找到「${name}」，请确认名称（区分大小写）`);
-                    contents.push((await getSource(db, env, sid)).content);
+                    const item = byName.get(name);
+                    if (!item) throw new Error(`原始订阅库中未找到「${name}」，请确认名称（区分大小写）`);
+                    contents.push((await getSource(db, env, item.id)).content);
+                    // 订阅代码作为该源全部节点名的前缀（<代码>_<原节点名>），未设代码则不改名
+                    prefixes.push(item.code || '');
                 }
                 e.urls = contents;
+                e.srcPrefixes = prefixes;
                 e.checkUA = false;
                 const target = String(e.target || '').toLowerCase();
                 if (!e.rule && ['mihomo', 'singbox'].includes(target)) {

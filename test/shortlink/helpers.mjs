@@ -5,11 +5,13 @@ export function createMockD1({ legacy = false, legacySources = false } = {}) {
         short_links: legacy ? [{ code: 'old00000', salt: 's', blob: 'b', created: 1 }] : [],
         legacy,
         legacySources,
+        noCode: legacySources, // 旧表同时缺 code 列
     };
     const norm = (sql) => sql.replace(/\s+/g, ' ').trim();
     function exec(sql, args) {
         const s = norm(sql);
         if (/^CREATE TABLE IF NOT EXISTS \w+/.test(s)) return null;
+        if (/^CREATE UNIQUE INDEX/.test(s)) return null;
         if (/^DROP TABLE short_links$/.test(s)) {
             state.short_links = [];
             state.legacy = false;
@@ -19,13 +21,25 @@ export function createMockD1({ legacy = false, legacySources = false } = {}) {
             state.legacySources = false;
             return null;
         }
+        if (/^ALTER TABLE sub_sources ADD COLUMN code TEXT$/.test(s)) {
+            state.noCode = false;
+            return null;
+        }
         if (/^SELECT ua FROM sub_sources LIMIT 1$/.test(s)) {
             if (state.legacySources) throw new Error('no such column: ua');
             return state.sub_sources[0] || null;
         }
+        if (/^SELECT code FROM sub_sources LIMIT 1$/.test(s)) {
+            if (state.noCode) throw new Error('no such column: code');
+            return state.sub_sources[0] || null;
+        }
+        if (/^SELECT id FROM sub_sources WHERE code = \? LIMIT 1$/.test(s)) {
+            const hit = state.sub_sources.find((r) => r.code === args[0]);
+            return hit ? { id: hit.id } : null;
+        }
         if (/^INSERT INTO sub_sources/.test(s)) {
-            const [id, name, blob, fetchedAt, ua] = args;
-            const row = { id, name, blob, fetched_at: fetchedAt, ua: ua ?? 'v2ray' };
+            const [id, name, blob, fetchedAt, ua, code] = args;
+            const row = { id, name, blob, fetched_at: fetchedAt, ua: ua ?? 'v2ray', code: code ?? null };
             const i = state.sub_sources.findIndex((r) => r.id === id);
             if (i >= 0) state.sub_sources[i] = row;
             else state.sub_sources.push(row);
@@ -51,8 +65,8 @@ export function createMockD1({ legacy = false, legacySources = false } = {}) {
         if (/^SELECT \* FROM short_links WHERE code = \?$/.test(s)) {
             return state.short_links.find((r) => r.code === args[0]) || null;
         }
-        if (/^SELECT id, name, fetched_at FROM sub_sources ORDER BY fetched_at DESC$/.test(s)) {
-            return [...state.sub_sources].sort((a, b) => b.fetched_at - a.fetched_at).map((r) => ({ id: r.id, name: r.name, fetched_at: r.fetched_at }));
+        if (/^SELECT id, name, code, fetched_at FROM sub_sources ORDER BY fetched_at DESC$/.test(s)) {
+            return [...state.sub_sources].sort((a, b) => b.fetched_at - a.fetched_at).map((r) => ({ id: r.id, name: r.name, code: r.code ?? null, fetched_at: r.fetched_at }));
         }
         if (/^SELECT COUNT\(\*\) AS total FROM short_links$/.test(s)) {
             return { total: state.short_links.length };
@@ -64,6 +78,19 @@ export function createMockD1({ legacy = false, legacySources = false } = {}) {
         if (/^UPDATE sub_sources SET name = \? WHERE id = \?$/.test(s)) {
             const row = state.sub_sources.find((r) => r.id === args[1]);
             if (row) row.name = args[0];
+            return null;
+        }
+        if (/^UPDATE sub_sources SET name = \?, code = \? WHERE id = \?$/.test(s)) {
+            const row = state.sub_sources.find((r) => r.id === args[2]);
+            if (row) {
+                row.name = args[0];
+                row.code = args[1];
+            }
+            return null;
+        }
+        if (/^UPDATE sub_sources SET code = \? WHERE id = \?$/.test(s)) {
+            const row = state.sub_sources.find((r) => r.id === args[1]);
+            if (row) row.code = args[0];
             return null;
         }
         if (/^UPDATE sub_sources SET blob = \?, fetched_at = \?, ua = \? WHERE id = \?$/.test(s)) {

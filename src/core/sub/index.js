@@ -14,7 +14,7 @@ import YAML from 'yaml';
  * @param {string} platform - 目标平台类型（如 mihomo、clash 等）
  * @param {boolean} api - 是否以 API 格式返回数据（包含 names 字段）
  * @param {boolean} heruser - 获取返回流量信息
- *
+ * @param {Array<string>|null} namePrefixes - 与 urlArray 平行的节点名前缀（订阅代码），空串/null 表示不重命名
  * @returns {Promise<{
  *   status: number,
  *   data: any,
@@ -23,7 +23,7 @@ import YAML from 'yaml';
  *
  * @throws {Error} 节点处理过程中发生异常时捕获并返回错误信息
  */
-export default async function processNodeConversion(urlArray, platform, api, heruser) {
+export default async function processNodeConversion(urlArray, platform, api, heruser, namePrefixes = null) {
     const results = {
         data: {},
         headers: [],
@@ -40,7 +40,7 @@ export default async function processNodeConversion(urlArray, platform, api, her
         return results;
     }
     try {
-        const { names, data, headers } = await produceArtifact(urlArray, platform, heruser);
+        const { names, data, headers } = await produceArtifact(urlArray, platform, heruser, namePrefixes);
         api
             ? (results.data = {
                   names,
@@ -62,30 +62,46 @@ export default async function processNodeConversion(urlArray, platform, api, her
 }
 
 /**
+ * 给单组解析出的节点加名称前缀（订阅代码），无前缀时原样返回；保持数组/单对象形状
+ */
+export function applySourceNamePrefix(proxies, prefix) {
+    if (!prefix || !proxies) return proxies;
+    const single = !Array.isArray(proxies);
+    const out = (single ? [proxies] : proxies).map((p) => (p && p.name ? { ...p, name: `${prefix}_${p.name}` } : p));
+    return single ? out[0] : out;
+}
+
+/**
  * @description 根据订阅 URL 获取代理节点，
  * 解析、去重节点名称，并根据目标平台生成对应订阅格式
  * @param {string|string[]} urls 订阅地址
  * @param {string} platform 输出平台类型
  * @param {boolean} heruser 是否获取流量信息
+ * @param {Array<string>|null} namePrefixes 与 urls 平行的节点名前缀
  * @returns {Object|string} 生成后的订阅数据
  */
-async function produceArtifact(urls, platform, heruser) {
+async function produceArtifact(urls, platform, heruser, namePrefixes = null) {
     let data = [],
         headers = [];
     const responseProxies = [],
         validUrls = [],
-        invalidUrls = [];
+        invalidUrls = [],
+        validIdx = [],
+        invalidIdx = [];
     const url = splitInputItems(urls);
-    url.forEach((item) => {
+    const prefixOf = (idx) => (Array.isArray(namePrefixes) && namePrefixes[idx] ? String(namePrefixes[idx]) : null);
+    url.forEach((item, idx) => {
         if (isUrl(item)) {
             validUrls.push(item);
+            validIdx.push(idx);
         } else {
             invalidUrls.push(item);
+            invalidIdx.push(idx);
         }
     });
     if (invalidUrls.length) {
         const currentProxies = invalidUrls
-            .map((i) => ProxyUtils.parse(i))
+            .map((i, k) => applySourceNamePrefix(ProxyUtils.parse(i), prefixOf(invalidIdx[k])))
             .flat()
             .filter(Boolean);
 
@@ -100,10 +116,11 @@ async function produceArtifact(urls, platform, heruser) {
                 : fetchResponse(url, 'v2ray').then((res) => [res, res]),
         ),
     );
-    for (const [dataRes, headerRes] of responses) {
+    for (const [k, [dataRes, headerRes]] of responses.entries()) {
         if (!dataRes?.data) continue;
         const raw = dataRes.data;
         let currentProxies = (Array.isArray(raw) ? raw : [raw]).map((i) => ProxyUtils.parse(i)).flat();
+        currentProxies = applySourceNamePrefix(currentProxies, prefixOf(validIdx[k]));
         responseProxies.push(currentProxies);
         headers.push(headerRes.headers);
     }

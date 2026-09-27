@@ -26,12 +26,12 @@ export async function handleShortLink(request, env) {
 
     if (path === '/api/source/save' && request.method === 'POST') {
         if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
-        const { url: sourceUrl, name, target } = await request.json();
+        const { url: sourceUrl, name, target, code } = await request.json();
         if (!sourceUrl || !/^https?:\/\//.test(String(sourceUrl))) throw new Error('无效的订阅地址');
         const cleanName = typeof name === 'string' && name.trim() ? name.trim().slice(0, 30) : '';
         if (!cleanName) throw new Error('请输入订阅名称');
         // 按当前客户端类型选择拉取 UA（白名单映射，未知 target 走默认）
-        const r = await saveSource(db, env, String(sourceUrl), cleanName, resolveSourceUa(typeof target === 'string' ? target : ''));
+        const r = await saveSource(db, env, String(sourceUrl), cleanName, resolveSourceUa(typeof target === 'string' ? target : ''), code);
         return jsonResponse({ success: true, ...r });
     }
     // 本机导入：内容由调用方在自己网络拉取后推送（适配封禁数据中心出口的机场）
@@ -41,11 +41,11 @@ export async function handleShortLink(request, env) {
         if (!adminToken || request.headers.get('x-admin-token') !== adminToken) {
             return notFound('未授权');
         }
-        const { url: sourceUrl, name, target, content, headers } = await request.json();
+        const { url: sourceUrl, name, target, content, headers, code } = await request.json();
         if (!sourceUrl || !/^https?:\/\//.test(String(sourceUrl))) throw new Error('无效的订阅地址');
         const cleanName = typeof name === 'string' && name.trim() ? name.trim().slice(0, 30) : '';
         if (!cleanName) throw new Error('请输入订阅名称');
-        const r = await importSource(db, env, String(sourceUrl), cleanName, resolveSourceUa(typeof target === 'string' ? target : ''), String(content || ''), typeof headers === 'object' && headers ? headers : {});
+        const r = await importSource(db, env, String(sourceUrl), cleanName, resolveSourceUa(typeof target === 'string' ? target : ''), String(content || ''), typeof headers === 'object' && headers ? headers : {}, code);
         return jsonResponse({ success: true, ...r });
     }
 
@@ -63,9 +63,9 @@ export async function handleShortLink(request, env) {
     }
     if (path === '/api/source/rename' && request.method === 'POST') {
         if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
-        const { id, name } = await request.json();
+        const { id, name, code } = await request.json();
         if (!id || !ID_RE.test(String(id))) throw new Error('无效的订阅 ID');
-        const r = await renameSource(db, env, String(id), name);
+        const r = await renameSource(db, env, String(id), name, code);
         if (!r) return notFound('原始订阅不存在');
         return jsonResponse({ success: true, ...r });
     }

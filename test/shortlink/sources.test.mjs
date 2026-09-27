@@ -31,7 +31,8 @@ test('saveSource 拉取并加密入库；listSources 不含 URL', async (t) => {
 
     const items = await listSources(db);
     assert.equal(items.length, 1);
-    assert.deepEqual(Object.keys(items[0]).sort(), ['fetchedAt', 'id', 'name']);
+    assert.deepEqual(Object.keys(items[0]).sort(), ['code', 'fetchedAt', 'id', 'name']);
+    assert.equal(items[0].code, null);
 
     const src = await getSource(db, env, id);
     assert.equal(src.url, URL_A);
@@ -155,7 +156,7 @@ test('renameSource 改名不影响内容；空名报错；源不存在返回 nul
     assert.equal(after.name, '新名字');
     assert.equal(after.content, before.content, '改名不应触碰内容');
 
-    await assert.rejects(() => renameSource(db, env, id, '   '), /请输入订阅名称/);
+    await assert.rejects(() => renameSource(db, env, id, '   '), /请提供要修改的名称或订阅代码/);
     assert.equal(await renameSource(db, env, 'nonexistent', 'X'), null);
 });
 
@@ -180,4 +181,80 @@ test('importSource 不经网络直接入库，刷新时按 target UA 服务端�
 
     // 缺内容报错
     await assert.rejects(() => importSource(db, env, URL_B, 'B', '', ''), /缺少订阅内容/);
+});
+
+test('订阅代码：save/import 带 code 入库，listSources/getSource 返回 code', async (t) => {
+    const realFetch = global.fetch;
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    global.fetch = stubFetch({ 'airport-a.example': SAMPLE_B64_SUB });
+
+    const db = createMockD1();
+    const env = createEnv(db);
+    const saved = await saveSource(db, env, URL_A, '机场A', 'clash-verge/2.0', ' YT ');
+    assert.equal(saved.code, 'YT');
+    assert.equal((await listSources(db))[0].code, 'YT');
+    assert.equal((await getSource(db, env, saved.id)).code, 'YT');
+
+    // importSource 同样支持
+    const imp = await importSource(db, env, URL_B, 'B', 'v2ray', 'manual', {}, 'AB');
+    assert.equal(imp.code, 'AB');
+});
+
+test('订阅代码全表唯一：跨订阅重复报错，同 URL 覆盖自身不受阻', async (t) => {
+    const realFetch = global.fetch;
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    global.fetch = stubFetch({ 'airport-a.example': SAMPLE_B64_SUB, 'airport-b.example': SAMPLE_B64_SUB });
+
+    const db = createMockD1();
+    const env = createEnv(db);
+    const a = await saveSource(db, env, URL_A, 'A', 'v2ray', 'YT');
+    await assert.rejects(() => saveSource(db, env, URL_B, 'B', 'v2ray', 'YT'), /已被其它订阅使用/);
+    // 同 URL 重存（同 id）：允许保留原代码
+    const a2 = await saveSource(db, env, URL_A, 'A', 'v2ray', 'YT');
+    assert.equal(a2.id, a.id);
+
+    // rename 抢占他人代码同样报错
+    const b = await saveSource(db, env, URL_B, 'B', 'v2ray', 'BB');
+    await assert.rejects(() => renameSource(db, env, b.id, 'B', 'YT'), /已被其它订阅使用/);
+    // 改成未被占用的代码成功
+    const r = await renameSource(db, env, b.id, 'B2', 'CC');
+    assert.deepEqual({ name: r.name, code: r.code }, { name: 'B2', code: 'CC' });
+    assert.equal((await getSource(db, env, b.id)).code, 'CC');
+});
+
+test('订阅代码格式校验：非法字符/超长报错，空值视为未设置', async (t) => {
+    const realFetch = global.fetch;
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    global.fetch = stubFetch({ 'airport-a.example': SAMPLE_B64_SUB });
+
+    const db = createMockD1();
+    const env = createEnv(db);
+    await assert.rejects(() => saveSource(db, env, URL_A, 'A', 'v2ray', '非法 code!'), /仅支持字母、数字、下划线、短横线/);
+    await assert.rejects(() => saveSource(db, env, URL_A, 'A', 'v2ray', 'a'.repeat(17)), /长度 1-16/);
+    // 空/空白代码 = 未设置
+    const r = await saveSource(db, env, URL_A, 'A', 'v2ray', '  ');
+    assert.equal(r.code, null);
+    // rename 传空代码 = 清除已有代码
+    await renameSource(db, env, r.id, 'A', 'OK1');
+    const cleared = await renameSource(db, env, r.id, 'A', '');
+    assert.equal(cleared.code, null);
+    assert.equal((await getSource(db, env, r.id)).code, null);
+});
+
+test('applySourceNamePrefix：节点名加 <代码>_ 前缀，空代码原样返回', async () => {
+    const { applySourceNamePrefix } = await import('../../src/core/sub/index.js');
+    const nodes = [{ name: '香港 01', type: 'ss' }, { name: '美国 01', type: 'ss' }];
+    const renamed = applySourceNamePrefix(nodes, 'YT');
+    assert.deepEqual(renamed.map((n) => n.name), ['YT_香港 01', 'YT_美国 01']);
+    assert.notEqual(renamed[0], nodes[0], '不应改动原对象');
+    assert.equal(nodes[0].name, '香港 01');
+    // 空代码/单对象形态
+    assert.equal(applySourceNamePrefix(nodes, ''), nodes);
+    assert.equal(applySourceNamePrefix(nodes[0], 'AB').name, 'AB_香港 01');
 });
