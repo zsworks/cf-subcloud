@@ -1993,10 +1993,12 @@ function sourcesPageHtml(e) {
                 items.forEach((s) => {
                     const row = document.createElement('div');
                     row.className = 'saved-item';
-                    const time = s.fetchedAt ? new Date(s.fetchedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                    const d = s.fetchedAt ? new Date(s.fetchedAt) : null;
+                    const p2 = (n) => String(n).padStart(2, '0');
+                    const time = d ? \`\${d.getFullYear()}-\${p2(d.getMonth() + 1)}-\${p2(d.getDate())} \${p2(d.getHours())}:\${p2(d.getMinutes())}\` : '';
                     const info = document.createElement('div');
                     info.className = 'saved-info';
-                    info.innerHTML = \`<span class="saved-mode">🗃️ \${s.name}</span>\${s.code ? \`<span class="src-code-chip">\${s.code}</span>\` : ''}<span class="saved-meta">\${time} 拉取 · 内容加密存储</span>\`;
+                    info.innerHTML = \`<span class="saved-mode">🗃️ \${s.name}</span>\${s.code ? \`<span class="src-code-chip">\${s.code}</span>\` : ''}<span class="saved-meta">\${time}</span>\`;
                     const actions = document.createElement('div');
                     actions.className = 'saved-actions';
                     const renameBtn = document.createElement('button');
