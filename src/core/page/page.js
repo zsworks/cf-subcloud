@@ -394,6 +394,18 @@ const PAGE_STYLE = (img) => `    <style>        * {
             white-space: nowrap;
         }
 
+        /* 订阅代码徽标：描边样式，与实底 .saved-mode 区分 */
+        .src-code-chip {
+            border: 1px solid var(--primary);
+            color: var(--primary-dark);
+            padding: 1px 9px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            white-space: nowrap;
+            font-family: monospace;
+        }
+
         .saved-code {
             font-family: monospace;
             color: var(--primary-dark);
@@ -1984,7 +1996,7 @@ function sourcesPageHtml(e) {
                     const time = s.fetchedAt ? new Date(s.fetchedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
                     const info = document.createElement('div');
                     info.className = 'saved-info';
-                    info.innerHTML = \`<span class="saved-mode">🗃️ \${s.name}\${s.code ? \` <span style="font-size:0.72rem;color:var(--primary);font-weight:700;">[\${s.code}]</span>\` : ''}</span><span class="saved-meta">\${time} 拉取 · \${s.code ? '节点名前缀 ' + s.code + ' · ' : ''}内容加密存储</span>\`;
+                    info.innerHTML = \`<span class="saved-mode">🗃️ \${s.name}</span>\${s.code ? \`<span class="src-code-chip">\${s.code}</span>\` : ''}<span class="saved-meta">\${time} 拉取 · 内容加密存储</span>\`;
                     const actions = document.createElement('div');
                     actions.className = 'saved-actions';
                     const renameBtn = document.createElement('button');

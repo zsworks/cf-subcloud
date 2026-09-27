@@ -2162,6 +2162,18 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=wP.generate
             white-space: nowrap;
         }
 
+        /* \u8BA2\u9605\u4EE3\u7801\u5FBD\u6807\uFF1A\u63CF\u8FB9\u6837\u5F0F\uFF0C\u4E0E\u5B9E\u5E95 .saved-mode \u533A\u5206 */
+        .src-code-chip {
+            border: 1px solid var(--primary);
+            color: var(--primary-dark);
+            padding: 1px 9px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            white-space: nowrap;
+            font-family: monospace;
+        }
+
         .saved-code {
             font-family: monospace;
             color: var(--primary-dark);
@@ -3700,7 +3712,7 @@ ${s}
                     const time = s.fetchedAt ? new Date(s.fetchedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
                     const info = document.createElement('div');
                     info.className = 'saved-info';
-                    info.innerHTML = \`<span class="saved-mode">\u{1F5C3}\uFE0F \${s.name}\${s.code ? \` <span style="font-size:0.72rem;color:var(--primary);font-weight:700;">[\${s.code}]</span>\` : ''}</span><span class="saved-meta">\${time} \u62C9\u53D6 \xB7 \${s.code ? '\u8282\u70B9\u540D\u524D\u7F00 ' + s.code + ' \xB7 ' : ''}\u5185\u5BB9\u52A0\u5BC6\u5B58\u50A8</span>\`;
+                    info.innerHTML = \`<span class="saved-mode">\u{1F5C3}\uFE0F \${s.name}</span>\${s.code ? \`<span class="src-code-chip">\${s.code}</span>\` : ''}<span class="saved-meta">\${time} \u62C9\u53D6 \xB7 \u5185\u5BB9\u52A0\u5BC6\u5B58\u50A8</span>\`;
                     const actions = document.createElement('div');
                     actions.className = 'saved-actions';
                     const renameBtn = document.createElement('button');
