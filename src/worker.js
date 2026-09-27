@@ -5,6 +5,7 @@ import { handleShortLink } from './utils/shortlink/index.js';
 import { configureRelay } from './utils/relayFetch.js';
 import { configureAssetFetcher } from './utils/assetsFetch.js';
 import { listSources, getSource } from './utils/shortlink/sources.js';
+import { timingSafeEqual } from './utils/shortlink/crypto.js';
 import { ASSET_MARKER } from './utils/assetsFetch.js';
 
 export default {
@@ -14,7 +15,8 @@ export default {
             if (env?.ASSETS) configureAssetFetcher((path) => env.ASSETS.fetch(new Request('https://assets.local' + path)));
 
             // 独立列表页：/saved 已保存订阅、/sources 原始订阅库
-            const { pathname } = new URL(request.url);
+            const reqUrl = new URL(request.url);
+            const { pathname } = reqUrl;
             if (pathname === '/saved' || pathname === '/sources') {
                 const e = buildConfig(request, env, false);
                 e.view = pathname === '/saved' ? 'saved' : 'sources';
@@ -34,6 +36,20 @@ export default {
             if (e.src) {
                 const db = env?.SHORT_LINK;
                 if (!db) throw new Error('原始订阅库未启用：未绑定 D1 数据库');
+                // 访问 Key：配置了 SRC_ACCESS_KEY 后，src 直链必须携带 &key=<Key>（常数时间比较）
+                const srcKey = env?.SRC_ACCESS_KEY;
+                if (srcKey) {
+                    const provided = reqUrl.searchParams.get('key') || '';
+                    const enc = new TextEncoder();
+                    const [ha, hb] = await Promise.all([
+                        crypto.subtle.digest('SHA-256', enc.encode(provided)),
+                        crypto.subtle.digest('SHA-256', enc.encode(String(srcKey))),
+                    ]);
+                    if (!timingSafeEqual([...new Uint8Array(ha)].map((x) => x.toString(16).padStart(2, '0')).join(''),
+                                          [...new Uint8Array(hb)].map((x) => x.toString(16).padStart(2, '0')).join(''))) {
+                        throw new Error('访问 Key 缺失或错误（&key=）');
+                    }
+                }
                 const items = await listSources(db);
                 const byName = new Map(items.map((i) => [i.name, i.id]));
                 const contents = [];
