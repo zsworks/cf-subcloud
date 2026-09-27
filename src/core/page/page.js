@@ -635,8 +635,7 @@ const PAGE_STYLE = (img) => `    <style>        * {
             font-weight: 600;
             max-width: 100%;
         }
-        .src-chip-x { cursor: pointer; font-weight: 400; opacity: 0.6; }
-        .src-chip-x:hover { opacity: 1; }
+        .src-remove-btn { border: 1.5px solid rgba(239, 90, 90, 0.35); background: #fff; }
         .src-dd {
             position: absolute;
             z-index: 30;
@@ -1152,6 +1151,7 @@ function homePageHtml(e, configJson) {
         }
 
         // 行 → 已入库标签态（表单持有 id，URL 不落表单）
+        // 已选源的行只保留一个红色减号：从列表中移除该行
         function setRowSource(row, src) {
             row.dataset.sourceId = src.id;
             row.dataset.sourceName = src.name;
@@ -1161,24 +1161,14 @@ function homePageHtml(e, configJson) {
             chip.className = 'src-chip';
             const label = document.createElement('span');
             label.innerText = \`🗃️ \${src.name}\`;
-            const x = document.createElement('span');
-            x.className = 'src-chip-x';
-            x.innerText = '✕';
-            x.title = '移除该订阅源';
-            x.onclick = () => clearRowSource(row);
-            chip.append(label, x);
+            chip.append(label);
             input.insertAdjacentElement('afterend', chip);
-        }
-
-        function clearRowSource(row) {
-            delete row.dataset.sourceId;
-            delete row.dataset.sourceName;
-            const chip = row.querySelector('.src-chip');
-            if (chip) chip.remove();
-            const input = row.querySelector('.dynamic-link-input');
-            input.style.display = '';
-            input.value = '';
-            input.focus();
+            for (const cls of ['.src-caret-btn', '.save-btn-circle', '.add-btn-circle']) {
+                const b = row.querySelector(cls);
+                if (b) b.style.display = 'none';
+            }
+            const rm = row.querySelector('.src-remove-btn');
+            if (rm) rm.style.display = '';
         }
 
         // 汇总行状态：已入库源 + 裸 URL
@@ -1266,6 +1256,20 @@ function homePageHtml(e, configJson) {
             }
         }
 
+        // 订阅行工具图标（渐变 SVG，与图标设计稿对应）
+        const SRC_PICK_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="lg-src-pick" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#38bdf8"/></linearGradient></defs><g fill="url(#lg-src-pick)"><rect x="2" y="3.2" width="20" height="2.6" rx="1.3"/><rect x="2" y="9.2" width="20" height="2.6" rx="1.3"/><rect x="2" y="15.2" width="8.5" height="2.6" rx="1.3"/><rect x="2" y="21" width="8.5" height="2.6" rx="1.3"/></g><path d="M13.4 15.6 L16.9 19.3 L22.3 13.1" fill="none" stroke="url(#lg-src-pick)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        const SRC_SAVE_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="lg-src-save" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f97316"/><stop offset="1" stop-color="#fde047"/></linearGradient></defs><path fill="url(#lg-src-save)" d="M2 4.5 C2 3.7 2.7 3 3.5 3 H8.6 C9 3 9.4 3.2 9.7 3.5 L11.6 5.5 H20.5 C21.3 5.5 22 6.2 22 7 V19 C22 19.8 21.3 20.5 20.5 20.5 H3.5 C2.7 20.5 2 19.8 2 19 Z"/><circle cx="12" cy="15" r="6" fill="#fff"/><path d="M12 11.6 V16 M9.9 14 L12 16.1 L14.1 14 M9 16.6 V17 A3 3 0 0 0 15 17 V16.6" fill="none" stroke="url(#lg-src-save)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        const SRC_REMOVE_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="11" fill="#ee5a5a"/><rect x="5.5" y="10.3" width="13" height="3.4" rx="1" fill="#fff"/></svg>';
+
+        // 减号：把该行从订阅列表中移除；若是最后一行则重置为空行
+        function removeSourceRow(row, containerId) {
+            const wrapper = document.getElementById(containerId);
+            row.remove();
+            if (wrapper && !wrapper.querySelector('.link-row')) {
+                addLinkRow(containerId, containerId.replace('links-wrapper-', ''));
+            }
+        }
+
         function addLinkRow(containerId, modeId) {
             const linksContainer = document.getElementById(containerId);
             if (!linksContainer) return;
@@ -1281,15 +1285,21 @@ function homePageHtml(e, configJson) {
             addBtn.onclick = () => addLinkRow(containerId, modeId);
             const saveBtn = document.createElement('div');
             saveBtn.className = 'row-tool-btn save-btn-circle';
-            saveBtn.innerText = '💾';
+            saveBtn.innerHTML = SRC_SAVE_ICON;
             saveBtn.title = '保存到原始订阅库（输入名称后实时拉取内容）';
             saveBtn.onclick = () => saveRowToLibrary(newRow);
             const caretBtn = document.createElement('div');
             caretBtn.className = 'row-tool-btn src-caret-btn';
-            caretBtn.innerText = '▾';
+            caretBtn.innerHTML = SRC_PICK_ICON;
             caretBtn.title = '选择已保存的原始订阅';
             caretBtn.onclick = () => openSourceDropdown(newRow);
-            newRow.append(input, caretBtn, saveBtn, addBtn);
+            const removeBtn = document.createElement('div');
+            removeBtn.className = 'row-tool-btn src-remove-btn';
+            removeBtn.innerHTML = SRC_REMOVE_ICON;
+            removeBtn.title = '从列表中移除';
+            removeBtn.style.display = 'none';
+            removeBtn.onclick = () => removeSourceRow(newRow, containerId);
+            newRow.append(input, caretBtn, saveBtn, removeBtn, addBtn);
             linksContainer.appendChild(newRow);
         }
 
@@ -1370,17 +1380,24 @@ function homePageHtml(e, configJson) {
             addFirstBtn.onclick = () => addLinkRow(\`links-wrapper-\${modeId}\`, modeId);
             const saveFirstBtn = document.createElement('div');
             saveFirstBtn.className = 'row-tool-btn save-btn-circle';
-            saveFirstBtn.innerText = '💾';
+            saveFirstBtn.innerHTML = SRC_SAVE_ICON;
             saveFirstBtn.title = '保存到原始订阅库（输入名称后实时拉取内容）';
             saveFirstBtn.onclick = () => saveRowToLibrary(firstRow);
             const caretFirstBtn = document.createElement('div');
             caretFirstBtn.className = 'row-tool-btn src-caret-btn';
-            caretFirstBtn.innerText = '▾';
+            caretFirstBtn.innerHTML = SRC_PICK_ICON;
             caretFirstBtn.title = '选择已保存的原始订阅';
             caretFirstBtn.onclick = () => openSourceDropdown(firstRow);
+            const removeFirstBtn = document.createElement('div');
+            removeFirstBtn.className = 'row-tool-btn src-remove-btn';
+            removeFirstBtn.innerHTML = SRC_REMOVE_ICON;
+            removeFirstBtn.title = '从列表中移除';
+            removeFirstBtn.style.display = 'none';
+            removeFirstBtn.onclick = () => removeSourceRow(firstRow, \`links-wrapper-\${modeId}\`);
             firstRow.appendChild(firstInput);
             firstRow.appendChild(caretFirstBtn);
             firstRow.appendChild(saveFirstBtn);
+            firstRow.appendChild(removeFirstBtn);
             firstRow.appendChild(addFirstBtn);
             linksWrapper.appendChild(firstRow);
             linkCard.appendChild(linksWrapper);
