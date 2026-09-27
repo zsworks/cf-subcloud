@@ -2,7 +2,6 @@ import { saveSource, importSource, listSources, refreshSource, deleteSource, ren
 import { saveLink, listLinks, getLink, clearLink, deleteLink, serveLink } from './links.js';
 import { base64ToBytes } from './crypto.js';
 import { resolveSourceUa } from './ua.js';
-import { getRelayConfig } from '../relayFetch.js';
 
 const ID_RE = /^[A-Za-z0-9_-]{40,64}$/;
 
@@ -17,32 +16,6 @@ function notFound(message) {
     return jsonResponse({ success: false, error: message }, 404);
 }
 
-// 中转链路诊断：token=中转令牌；返回 worker → relay 一跳的真实结果
-async function debugRelay(url) {
-    const cfg = getRelayConfig();
-    if (!cfg) return jsonResponse({ relay: false, note: '未配置 FETCH_RELAY_URL' });
-    const token = url.searchParams.get('token') || '';
-    if (token !== cfg.token) return jsonResponse({ error: 'token mismatch' }, 401);
-    const target = url.searchParams.get('url') || 'https://api.xmancdn.net/osubscribe.php?token2=dq36w6my-b83a21c49emcjjefmz&sip002=1';
-    const u = new URL(cfg.base);
-    u.searchParams.set('url', target);
-    u.searchParams.set('ua', 'clash-verge/2.0');
-    try {
-        const res = await fetch(u, { method: 'GET', headers: { 'x-relay-token': cfg.token } });
-        const body = (await res.text()).slice(0, 100);
-        return jsonResponse({
-            relayBase: cfg.base,
-            status: res.status,
-            xRelayError: res.headers.get('x-relay-error'),
-            upstreamStatus: res.headers.get('x-relay-upstream-status'),
-            server: res.headers.get('server'),
-            body,
-        });
-    } catch (err) {
-        return jsonResponse({ relayBase: cfg.base, threw: String(err?.message || err), cause: String(err?.cause?.message || '') });
-    }
-}
-
 // 短链接与原始订阅库路由（CF Workers 专用，依赖 D1 绑定 SHORT_LINK 与环境变量 LINK_ENC_KEY）
 // 非本模块路由返回 null，交回主流程
 export async function handleShortLink(request, env) {
@@ -50,9 +23,6 @@ export async function handleShortLink(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (path === '/api/debug/relay' && request.method === 'GET') {
-        return debugRelay(url);
-    }
 
     if (path === '/api/source/save' && request.method === 'POST') {
         if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
