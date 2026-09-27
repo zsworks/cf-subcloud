@@ -1004,7 +1004,7 @@ function homePageHtml(e, configJson) {
                     }
                     addLinkRow(\`links-wrapper-\${modeId}\`, modeId);
                     const row = wrapper.lastElementChild;
-                    setRowSource(row, s);
+                    setRowSource(row, s, { autoAppend: false });
                 });
                 (resp.rawUrls || []).forEach(() => addLinkRow(\`links-wrapper-\${modeId}\`, modeId));
                 const inputs = wrapper.querySelectorAll('.dynamic-link-input');
@@ -1012,6 +1012,8 @@ function homePageHtml(e, configJson) {
                 (resp.rawUrls || []).forEach((u) => {
                     if (inputs[idx]) inputs[idx++].value = u;
                 });
+                const lastRow = wrapper.lastElementChild;
+                if (lastRow) ensureTrailingEmptyRow(lastRow);
             }
             const params = resp.params || {};
 
@@ -1152,7 +1154,17 @@ function homePageHtml(e, configJson) {
 
         // 行 → 已入库标签态（表单持有 id，URL 不落表单）
         // 已选源的行只保留一个红色减号：从列表中移除该行
-        function setRowSource(row, src) {
+        // 行内容提交（选源/输入完成）后，若该行是末行且有内容，自动补一个空输入行
+        function ensureTrailingEmptyRow(row) {
+            const wrapper = row.parentNode;
+            if (!wrapper || !wrapper.id || !wrapper.id.startsWith('links-wrapper-')) return;
+            const rows = wrapper.querySelectorAll('.link-row');
+            if (rows[rows.length - 1] !== row) return;
+            const hasContent = row.dataset.sourceId || (row.querySelector('.dynamic-link-input')?.value.trim() || '');
+            if (hasContent) addLinkRow(wrapper.id, wrapper.id.replace('links-wrapper-', ''));
+        }
+
+        function setRowSource(row, src, opts = {}) {
             row.dataset.sourceId = src.id;
             row.dataset.sourceName = src.name;
             const input = row.querySelector('.dynamic-link-input');
@@ -1169,6 +1181,7 @@ function homePageHtml(e, configJson) {
             }
             const rm = row.querySelector('.src-remove-btn');
             if (rm) rm.style.display = '';
+            if (opts.autoAppend !== false) ensureTrailingEmptyRow(row);
         }
 
         // 汇总行状态：已入库源 + 裸 URL
@@ -1265,8 +1278,11 @@ function homePageHtml(e, configJson) {
         function removeSourceRow(row, containerId) {
             const wrapper = document.getElementById(containerId);
             row.remove();
-            if (wrapper && !wrapper.querySelector('.link-row')) {
+            const rows = wrapper ? wrapper.querySelectorAll('.link-row') : [];
+            if (!rows.length) {
                 addLinkRow(containerId, containerId.replace('links-wrapper-', ''));
+            } else {
+                ensureTrailingEmptyRow(rows[rows.length - 1]);
             }
         }
 
@@ -1279,6 +1295,13 @@ function homePageHtml(e, configJson) {
             input.type = 'text';
             input.className = 'link-input dynamic-link-input';
             input.placeholder = MODES_META[modeId]?.placeholder || '输入订阅地址';
+            input.addEventListener('blur', () => ensureTrailingEmptyRow(newRow));
+            input.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter') {
+                    ensureTrailingEmptyRow(newRow);
+                    input.blur();
+                }
+            });
             const addBtn = document.createElement('div');
             addBtn.className = 'add-btn-circle';
             addBtn.innerText = '＋';
@@ -1374,6 +1397,13 @@ function homePageHtml(e, configJson) {
             firstInput.type = 'text';
             firstInput.className = 'link-input dynamic-link-input';
             firstInput.placeholder = meta.placeholder;
+            firstInput.addEventListener('blur', () => ensureTrailingEmptyRow(firstRow));
+            firstInput.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter') {
+                    ensureTrailingEmptyRow(firstRow);
+                    firstInput.blur();
+                }
+            });
             const addFirstBtn = document.createElement('div');
             addFirstBtn.className = 'add-btn-circle';
             addFirstBtn.innerText = '＋';
