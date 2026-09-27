@@ -5,36 +5,25 @@ import qrcodeLib from './vendor/qrcode.min.js';
 import markedLib from './vendor/marked.min.js';
 import purifyLib from './vendor/purify.min.js';
 
-export async function getFakePage(e) {
-    let configData = JSON.parse(configs(e.tplmh, e.tplsb));
-    if (e.templateBaseUrl) {
-        try {
-            const res = await fetch(`${e.templateBaseUrl}/templates.json`);
-            if (res.ok) {
-                const externalTemplates = await res.json();
-                for (const [target, templates] of Object.entries(externalTemplates)) {
-                    if (configData[target]) {
-                        configData[target].templates = templates;
-                    }
-                }
-            }
-        } catch (_) {}
-    }
-    const configJson = JSON.stringify(configData);
-    return `
-<!DOCTYPE html>
-<html lang="zh-CN">
+const KEY_DIALOG = `    <dialog id="keyDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; box-shadow: var(--shadow-md); position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; width: min(22rem, calc(100vw - 3rem));">
+        <p id="keyDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
+        <div style="position: relative; margin-bottom: 1.2rem;">
+            <input type="password" id="keyDialogInput" placeholder="请输入访问口令"
+                style="width: 100%; padding: 10px 40px 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center;" />
+            <span id="keyToggle" title="显示/隐藏口令"
+                style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; width: 18px; height: 18px; color: #94a3b8; display: flex; align-items: center; justify-content: center;"></span>
+        </div>
+        <input type="text" id="keyDialogLabel" placeholder="备注（可选）"
+            style="display: none; width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button id="keyDialogCancel"
+                style="border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">取消</button>
+            <button id="keyDialogOk"
+                style="border: none; background: var(--primary); color: #fff; border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">确定</button>
+        </div>
+    </dialog>`;
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
-    <title>星尘配置转换 · 订阅转换</title>
-    <script>${qrcodeLib}</script>
-    <script>${markedLib}</script>
-    <script>${purifyLib}</script>
-    <style>
-        * {
+const PAGE_STYLE = (img) => `    <style>        * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -57,7 +46,7 @@ export async function getFakePage(e) {
         }
 
         body {
-            background: url(${e.IMG});
+            background: url(${img});
             font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, sans-serif;
             min-height: 100vh;
             display: flex;
@@ -677,7 +666,89 @@ export async function getFakePage(e) {
                 font-size: 0.8rem;
             }
         }
-    </style>
+
+        .home-nav {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 14px;
+            margin: 2px 0 6px;
+        }
+
+        .home-nav-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 9px 22px;
+            border-radius: 999px;
+            background: rgba(99, 102, 241, 0.08);
+            color: var(--primary-dark);
+            font-size: 0.88rem;
+            font-weight: 600;
+            text-decoration: none;
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            transition: all 0.2s;
+        }
+
+        .home-nav-link:hover {
+            background: var(--primary);
+            color: #fff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+        }
+
+        .page-back {
+            text-align: center;
+            margin: 0 0 10px;
+        }
+
+        .page-back a {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            text-decoration: none;
+        }
+
+        .page-back a:hover {
+            color: var(--primary);
+        }
+    </style>`;
+
+export async function getFakePage(e) {
+    let configData = JSON.parse(configs(e.tplmh, e.tplsb));
+    if (e.templateBaseUrl) {
+        try {
+            const res = await fetch(`${e.templateBaseUrl}/templates.json`);
+            if (res.ok) {
+                const externalTemplates = await res.json();
+                for (const [target, templates] of Object.entries(externalTemplates)) {
+                    if (configData[target]) {
+                        configData[target].templates = templates;
+                    }
+                }
+            }
+        } catch (_) {}
+    }
+    const configJson = JSON.stringify(configData);
+
+    if (e.view === 'saved') return savedPageHtml(e, configJson);
+    if (e.view === 'sources') return sourcesPageHtml(e);
+    return homePageHtml(e, configJson);
+}
+
+function homePageHtml(e, configJson) {
+    return `
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    <title>星尘配置转换 · 订阅转换</title>
+    <script>${qrcodeLib}</script>
+    <script>${markedLib}</script>
+    <script>${purifyLib}</script>
+    ${PAGE_STYLE(e.IMG)}
 </head>
 
 <body>
@@ -688,21 +759,10 @@ export async function getFakePage(e) {
             <div class="badge">多合一订阅</div>
         </div>
 
-        <!-- 已保存订阅列表 -->
-        <div class="form-card" id="savedCard">
-            <div class="section-title">📚 已保存订阅</div>
-            <div id="savedList" class="saved-list"></div>
-            <div class="saved-pagination">
-                <span class="saved-page-btn" id="savedPrev">‹ 上一页</span>
-                <span id="savedPageNum">1</span>
-                <span class="saved-page-btn" id="savedNext">下一页 ›</span>
-            </div>
-        </div>
-
-        <!-- 原始订阅库 -->
-        <div class="form-card" id="sourceCard">
-            <div class="section-title">🗃️ 原始订阅库</div>
-            <div id="sourceList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        <!-- 列表页导航 -->
+        <div class="home-nav">
+            <a class="home-nav-link" href="/saved">📚 已保存订阅</a>
+            <a class="home-nav-link" href="/sources">🗃️ 原始订阅库</a>
         </div>
 
         <!-- 模式选择器 - 与模板选择器样式一致 -->
@@ -734,23 +794,7 @@ export async function getFakePage(e) {
         </div>
     </div>
 
-    <dialog id="keyDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; box-shadow: var(--shadow-md); position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; width: min(22rem, calc(100vw - 3rem));">
-        <p id="keyDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
-        <div style="position: relative; margin-bottom: 1.2rem;">
-            <input type="password" id="keyDialogInput" placeholder="请输入访问口令"
-                style="width: 100%; padding: 10px 40px 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; text-align: center;" />
-            <span id="keyToggle" title="显示/隐藏口令"
-                style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; width: 18px; height: 18px; color: #94a3b8; display: flex; align-items: center; justify-content: center;"></span>
-        </div>
-        <input type="text" id="keyDialogLabel" placeholder="备注（可选）"
-            style="display: none; width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1.2rem; text-align: center;" />
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
-            <button id="keyDialogCancel"
-                style="border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">取消</button>
-            <button id="keyDialogOk"
-                style="border: none; background: var(--primary); color: #fff; border-radius: 999px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;">确定</button>
-        </div>
-    </dialog>
+    ${KEY_DIALOG}
 
     <dialog id="nameDialog" style="border: none; border-radius: 1.2rem; padding: 1.5rem; box-shadow: var(--shadow-md); position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; width: min(22rem, calc(100vw - 3rem));">
         <p id="nameDialogMsg" style="font-size: 0.88rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 1rem;"></p>
@@ -903,7 +947,6 @@ export async function getFakePage(e) {
                 editingCode = data.code;
                 editingLabel = label || '';
                 editingOldKey = key;
-                loadSavedList(savedPager.page);
                 const shortUrl = \`\${window.location.origin}/s/\${data.code}?key=\${b64EncodeKey(key)}\`;
                 updateResultAndQR(shortUrl);
                 navigator.clipboard.writeText(shortUrl).then(() => {
@@ -928,47 +971,11 @@ export async function getFakePage(e) {
         });
         setKeyToggle(false);
 
-        // ===== 已保存订阅列表 =====
+        // ===== 编辑状态（?edit= 载入后保存更新原短链） =====
         let editingCode = null;
         let editingLabel = '';
         // 修改回填时已验证的原密钥，保存更新时作为 oldKey 提交
         let editingOldKey = '';
-        const savedPager = { page: 1, totalPages: 1 };
-        // 已在本地解密的条目信息（code -> blob 解密结果），用于列表展示 label 等信息
-        const unlockedInfo = new Map();
-        // 已验证的密钥（code -> key），清除等操作免重复输入
-        const unlockedKeys = new Map();
-        let currentSavedItems = [];
-
-        async function loadSavedList(page = 1) {
-            try {
-                const resp = await fetch(\`/api/short/list?page=\${page}&limit=5\`);
-                const data = await resp.json();
-                if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error);
-                savedPager.page = data.page;
-                savedPager.totalPages = data.totalPages;
-                currentSavedItems = data.items || [];
-                renderSavedList(currentSavedItems);
-                updateSavedPagerUI();
-            } catch (err) {
-                document.getElementById('savedCard').style.display = 'none';
-            }
-        }
-
-        function updateSavedPagerUI() {
-            const pageNum = document.getElementById('savedPageNum');
-            const prev = document.getElementById('savedPrev');
-            const next = document.getElementById('savedNext');
-            if (pageNum) pageNum.innerText = \`\${savedPager.page} / \${savedPager.totalPages}\`;
-            if (prev) prev.classList.toggle('disabled', savedPager.page <= 1);
-            if (next) next.classList.toggle('disabled', savedPager.page >= savedPager.totalPages);
-        }
-
-        function turnSavedPage(dir) {
-            const target = savedPager.page + dir;
-            if (target < 1 || target > savedPager.totalPages) return;
-            loadSavedList(target);
-        }
 
         // 解锁条目：口令交服务端 HMAC 校验并解密，明文配置仅回传表单所需字段
         async function unlockEntry(code, message, btnText) {
@@ -978,106 +985,7 @@ export async function getFakePage(e) {
             if (!resp.success) {
                 throw new Error(typeof resp === 'string' ? resp : resp.error || '获取失败');
             }
-            unlockedInfo.set(code, { ...resp, key });
-            unlockedKeys.set(code, key);
             return { key, resp };
-        }
-
-        function renderSavedList(items) {
-            const box = document.getElementById('savedList');
-            if (!box) return;
-            box.innerHTML = '';
-            if (!items.length) {
-                box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">暂无保存的订阅</div>';
-                return;
-            }
-            const origin = window.location.origin;
-            items.forEach((item) => {
-                const row = document.createElement('div');
-                row.className = 'saved-item';
-                if (item.code === editingCode) row.classList.add('editing');
-                const date = item.created
-                    ? new Date(item.created).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-                    : '';
-                // 服务端返回 label；已解锁条目展示来源与缓存状态
-                const unlocked = unlockedInfo.get(item.code);
-                const info = document.createElement('div');
-                info.className = 'saved-info';
-                const labelText = unlocked?.label || item.label;
-                if (unlocked) {
-                    const modeName = MODES_META[unlocked.target]?.name || unlocked.target;
-                    const srcCount = (unlocked.sources || []).length;
-                    const rawCount = (unlocked.rawUrls || []).length;
-                    const srcPart = srcCount ? \`\${srcCount}个订阅源\` : '';
-                    const rawPart = rawCount ? \`\${rawCount}条链接\` : '';
-                    info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} · \${[srcPart, rawPart].filter(Boolean).join(' + ')} · \${date} · \${unlocked.hasContent ? '📦 已缓存' : '⏳ 待生成'}</span>\`;
-                } else {
-                    info.innerHTML = \`<span class="saved-code">\${labelText ? '' : '🔒 '}/s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` · \${labelText}\` : ' · 输入口令后显示详情'}</span>\`;
-                }
-                const actions = document.createElement('div');
-                actions.className = 'saved-actions';
-                const copyBtn = document.createElement('button');
-                copyBtn.className = 'saved-btn';
-                copyBtn.innerText = '复制';
-                copyBtn.onclick = async () => {
-                    try {
-                        const unlocked2 = await unlockEntry(item.code, '该订阅内容已加密，请输入访问口令以生成可用的短链接。', '复制');
-                        if (!unlocked2) return;
-                        renderSavedList(currentSavedItems);
-                        const link = \`\${origin}/s/\${item.code}?key=\${b64EncodeKey(unlocked2.key)}\`;
-                        await navigator.clipboard.writeText(link);
-                        showToast('✓ 短链接已复制', 'success');
-                    } catch {
-                        showToast('✗ 访问口令错误', 'error');
-                    }
-                };
-                const editBtn = document.createElement('button');
-                editBtn.className = 'saved-btn';
-                editBtn.innerText = '修改';
-                editBtn.onclick = async () => {
-                    try {
-                        const unlocked2 = await unlockEntry(item.code, '请输入访问口令以载入该订阅的配置。', '载入');
-                        if (!unlocked2) return;
-                        fillFormFromParams(unlocked2.resp);
-                        editingCode = item.code;
-                        editingLabel = unlocked2.resp.label || '';
-                        editingOldKey = unlocked2.key;
-                        renderSavedList(currentSavedItems);
-                        showToast('✓ 已载入，保存将更新该短链接', 'success');
-                    } catch {
-                        showToast('✗ 访问口令错误', 'error');
-                    }
-                };
-                const clearBtn = document.createElement('button');
-                clearBtn.className = 'saved-btn saved-btn-danger';
-                clearBtn.innerText = '清除';
-                clearBtn.onclick = async () => {
-                    try {
-                        // 已解锁条目自动携带会话内已验证的口令，免重复输入
-                        let clearKey = unlockedKeys.get(item.code);
-                        if (!clearKey) {
-                            const r = await unlockEntry(item.code, '请输入访问口令以清除该订阅的缓存内容。', '清除');
-                            if (!r) return;
-                            clearKey = r.key;
-                        }
-                        const resp = await fetch('/api/short/clear', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ code: item.code, key: clearKey }),
-                        });
-                        const data = await resp.json();
-                        if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error || '清除失败');
-                        unlockedInfo.delete(item.code);
-                        await loadSavedList(savedPager.page);
-                        showToast('✓ 已清除，下次访问将重新生成', 'success');
-                    } catch (err) {
-                        showToast(\`✗ \${err.message || '访问口令错误'}\`, 'error');
-                    }
-                };
-                actions.append(copyBtn, editBtn, clearBtn);
-                row.append(info, actions);
-                box.appendChild(row);
-            });
         }
 
         // 将保存的配置回填到表单（resp = /api/short/get 响应）
@@ -1133,8 +1041,6 @@ export async function getFakePage(e) {
             });
         }
 
-        document.getElementById('savedPrev')?.addEventListener('click', () => turnSavedPage(-1));
-        document.getElementById('savedNext')?.addEventListener('click', () => turnSavedPage(1));
 
         // ===== 原始订阅库管理 =====
         async function loadSourceLibrary() {
@@ -1696,11 +1602,406 @@ export async function getFakePage(e) {
         }
 
         initApp();
-        loadSavedList();
-        loadSourceLibrary();
+
+        // ?edit=<短码>：从已保存订阅页跳转来修改配置，口令校验后回填表单
+        (async () => {
+            const editCode = new URLSearchParams(location.search).get('edit');
+            if (!editCode || !/^[A-Za-z0-9]{4,16}$/.test(editCode)) return;
+            try {
+                const unlocked = await unlockEntry(editCode, '请输入访问口令以载入该订阅的配置。', '载入');
+                if (unlocked) {
+                    fillFormFromParams(unlocked.resp);
+                    editingCode = editCode;
+                    editingLabel = unlocked.resp.label || '';
+                    editingOldKey = unlocked.key;
+                    showToast('✓ 已载入，保存将更新该短链接', 'success');
+                }
+            } catch {
+                showToast('✗ 访问口令错误', 'error');
+            }
+        })();
     </script>
 </body>
 
 </html>
     `;
+}
+
+
+
+// ===== 子页面共享骨架 =====
+function subpageShell(e, { title, heroIcon, heroTitle, badge, body, script }) {
+    return `
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    <title>${title}</title>
+    ${PAGE_STYLE(e.IMG)}
+</head>
+
+<body>
+    <div class="glass-container">
+        <div class="hero">
+            <h1>${heroIcon} ${heroTitle}</h1>
+            <div class="badge">${badge}</div>
+        </div>
+
+        <div class="page-back"><a href="/">← 返回转换器</a></div>
+${body}
+        <div class="beian">
+            <a href="${e.beianurl}" style="color: var(--primary-dark); text-decoration: none;">${e.beian}</a>
+        </div>
+    </div>
+
+    ${KEY_DIALOG}
+
+    <script>
+${script}
+    </script>
+</body>
+
+</html>
+    `;
+}
+
+// ===== /saved 已保存订阅列表 =====
+function savedPageHtml(e, configJson) {
+    const body = `        <div class="form-card">
+            <div class="section-title">📚 已保存订阅</div>
+            <div id="savedList" class="saved-list"></div>
+            <div class="saved-pagination">
+                <span class="saved-page-btn" id="savedPrev">‹ 上一页</span>
+                <span id="savedPageNum">1</span>
+                <span class="saved-page-btn" id="savedNext">下一页 ›</span>
+            </div>
+        </div>`;
+    const script = `const MODES_META = ${configJson};
+
+        const EYE_ICON =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>';
+        const EYE_OFF_ICON =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>';
+
+        function setKeyToggle(shown) {
+            const toggle = document.getElementById('keyToggle');
+            if (toggle) toggle.innerHTML = shown ? EYE_OFF_ICON : EYE_ICON;
+        }
+
+        function askKey(message, btnText = '确定') {
+            return new Promise((resolve) => {
+                const dlg = document.getElementById('keyDialog');
+                const msg = document.getElementById('keyDialogMsg');
+                const input = document.getElementById('keyDialogInput');
+                const ok = document.getElementById('keyDialogOk');
+                const cancel = document.getElementById('keyDialogCancel');
+                msg.innerText = message;
+                ok.innerText = btnText;
+                input.value = '';
+                input.type = 'password';
+                setKeyToggle(false);
+                let settled = false;
+                const done = (val) => {
+                    if (settled) return;
+                    settled = true;
+                    dlg.onclose = null;
+                    ok.onclick = null;
+                    cancel.onclick = null;
+                    input.onkeydown = null;
+                    dlg.close();
+                    resolve(val);
+                };
+                ok.onclick = () => {
+                    const key = input.value.trim() || null;
+                    done(key ? { key } : null);
+                };
+                cancel.onclick = () => done(null);
+                dlg.onclose = () => done(null);
+                input.onkeydown = (ev) => {
+                    if (ev.key === 'Enter') {
+                        const key = input.value.trim() || null;
+                        done(key ? { key } : null);
+                    }
+                };
+                dlg.showModal();
+                setTimeout(() => input.focus(), 50);
+            });
+        }
+
+        document.getElementById('keyToggle')?.addEventListener('click', () => {
+            const input = document.getElementById('keyDialogInput');
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            setKeyToggle(show);
+            input.focus();
+        });
+        setKeyToggle(false);
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.innerText = message;
+            toast.style.position = 'fixed';
+            toast.style.bottom = '20px';
+            toast.style.left = '50%';
+            toast.style.transform = 'translateX(-50%)';
+            toast.style.background = type === 'success' ? '#10b981' : '#ef4444';
+            toast.style.color = 'white';
+            toast.style.padding = '10px 24px';
+            toast.style.borderRadius = '40px';
+            toast.style.fontSize = '0.85rem';
+            toast.style.zIndex = '999';
+            toast.style.fontWeight = 'bold';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        }
+
+        function b64EncodeKey(str) {
+            return btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+        }
+
+        const savedPager = { page: 1, totalPages: 1 };
+        const unlockedInfo = new Map();
+        const unlockedKeys = new Map();
+        let currentSavedItems = [];
+
+        async function loadSavedList(page = 1) {
+            try {
+                const resp = await fetch(\`/api/short/list?page=\${page}&limit=10\`);
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error);
+                savedPager.page = data.page;
+                savedPager.totalPages = data.totalPages;
+                currentSavedItems = data.items || [];
+                renderSavedList(currentSavedItems);
+                updateSavedPagerUI();
+            } catch (err) {
+                document.getElementById('savedList').innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">列表加载失败</div>';
+            }
+        }
+
+        function updateSavedPagerUI() {
+            document.getElementById('savedPageNum').innerText = \`\${savedPager.page} / \${savedPager.totalPages}\`;
+            document.getElementById('savedPrev').classList.toggle('disabled', savedPager.page <= 1);
+            document.getElementById('savedNext').classList.toggle('disabled', savedPager.page >= savedPager.totalPages);
+        }
+
+        document.getElementById('savedPrev')?.addEventListener('click', () => {
+            if (savedPager.page > 1) loadSavedList(savedPager.page - 1);
+        });
+        document.getElementById('savedNext')?.addEventListener('click', () => {
+            if (savedPager.page < savedPager.totalPages) loadSavedList(savedPager.page + 1);
+        });
+
+        async function unlockEntry(code, message, btnText) {
+            const { key } = (await askKey(message, btnText)) || {};
+            if (!key) return null;
+            const resp = await fetch(\`/api/short/get?code=\${code}&key=\${encodeURIComponent(b64EncodeKey(key))}\`).then((x) => x.json());
+            if (!resp.success) {
+                throw new Error(typeof resp === 'string' ? resp : resp.error || '获取失败');
+            }
+            unlockedInfo.set(code, { ...resp, key });
+            unlockedKeys.set(code, key);
+            return { key, resp };
+        }
+
+        function renderSavedList(items) {
+            const box = document.getElementById('savedList');
+            box.innerHTML = '';
+            if (!items.length) {
+                box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">暂无保存的订阅（在转换器生成后点 🔒 保存订阅内容）</div>';
+                return;
+            }
+            const origin = window.location.origin;
+            items.forEach((item) => {
+                const row = document.createElement('div');
+                row.className = 'saved-item';
+                const date = item.created
+                    ? new Date(item.created).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    : '';
+                const unlocked = unlockedInfo.get(item.code);
+                const info = document.createElement('div');
+                info.className = 'saved-info';
+                const labelText = unlocked?.label || item.label;
+                if (unlocked) {
+                    const modeName = MODES_META[unlocked.target]?.name || unlocked.target;
+                    const srcCount = (unlocked.sources || []).length;
+                    const rawCount = (unlocked.rawUrls || []).length;
+                    const srcPart = srcCount ? \`\${srcCount}个订阅源\` : '';
+                    const rawPart = rawCount ? \`\${rawCount}条链接\` : '';
+                    info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} · \${[srcPart, rawPart].filter(Boolean).join(' + ')} · \${date} · \${unlocked.hasContent ? '📦 已缓存' : '⏳ 待生成'}</span>\`;
+                } else {
+                    info.innerHTML = \`<span class="saved-code">\${labelText ? '' : '🔒 '}/s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` · \${labelText}\` : ' · 输入口令后显示详情'}</span>\`;
+                }
+                const actions = document.createElement('div');
+                actions.className = 'saved-actions';
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'saved-btn';
+                copyBtn.innerText = '复制';
+                copyBtn.onclick = async () => {
+                    try {
+                        const unlocked2 = await unlockEntry(item.code, '该订阅内容已加密，请输入访问口令以生成可用的短链接。', '复制');
+                        if (!unlocked2) return;
+                        renderSavedList(currentSavedItems);
+                        const link = \`\${origin}/s/\${item.code}?key=\${b64EncodeKey(unlocked2.key)}\`;
+                        await navigator.clipboard.writeText(link);
+                        showToast('✓ 短链接已复制', 'success');
+                    } catch {
+                        showToast('✗ 访问口令错误', 'error');
+                    }
+                };
+                const editBtn = document.createElement('button');
+                editBtn.className = 'saved-btn';
+                editBtn.innerText = '修改';
+                editBtn.onclick = () => {
+                    // 跳转转换器，口令在那里输入并回填表单
+                    location.href = \`/?edit=\${item.code}\`;
+                };
+                const delBtn = document.createElement('button');
+                delBtn.className = 'saved-btn saved-btn-danger';
+                delBtn.innerText = '删除';
+                delBtn.onclick = async () => {
+                    try {
+                        let delKey = unlockedKeys.get(item.code);
+                        if (!delKey) {
+                            const r = await unlockEntry(item.code, '请输入访问口令以删除该短链接。', '删除');
+                            if (!r) return;
+                            delKey = r.key;
+                        }
+                        const resp = await fetch('/api/short/delete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ code: item.code, key: delKey }),
+                        });
+                        const data = await resp.json();
+                        if (!resp.ok || !data.success) throw new Error(typeof data === 'string' ? data : data.error || '删除失败');
+                        unlockedInfo.delete(item.code);
+                        unlockedKeys.delete(item.code);
+                        await loadSavedList(savedPager.page);
+                        showToast('✓ 已删除', 'success');
+                    } catch (err) {
+                        showToast(\`✗ \${err.message || '访问口令错误'}\`, 'error');
+                    }
+                };
+                actions.append(copyBtn, editBtn, delBtn);
+                row.append(info, actions);
+                box.appendChild(row);
+            });
+        }
+
+        loadSavedList();`;
+    return subpageShell(e, {
+        title: '已保存订阅 · 星尘转换器',
+        heroIcon: '📚',
+        heroTitle: '已保存订阅',
+        badge: '短链管理',
+        body,
+        script,
+    });
+}
+
+// ===== /sources 原始订阅库 =====
+function sourcesPageHtml(e) {
+    const body = `        <div class="form-card">
+            <div class="section-title">🗃️ 原始订阅库</div>
+            <div id="sourceList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>`;
+    const script = `function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.innerText = message;
+            toast.style.position = 'fixed';
+            toast.style.bottom = '20px';
+            toast.style.left = '50%';
+            toast.style.transform = 'translateX(-50%)';
+            toast.style.background = type === 'success' ? '#10b981' : '#ef4444';
+            toast.style.color = 'white';
+            toast.style.padding = '10px 24px';
+            toast.style.borderRadius = '40px';
+            toast.style.fontSize = '0.85rem';
+            toast.style.zIndex = '999';
+            toast.style.fontWeight = 'bold';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        }
+
+        async function loadSourceLibrary() {
+            const box = document.getElementById('sourceList');
+            try {
+                const resp = await fetch('/api/source/list');
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(data.error);
+                box.innerHTML = '';
+                const items = data.items || [];
+                if (!items.length) {
+                    box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">暂无原始订阅（在转换器的订阅链接行点 💾 保存）</div>';
+                    return;
+                }
+                items.forEach((s) => {
+                    const row = document.createElement('div');
+                    row.className = 'saved-item';
+                    const time = s.fetchedAt ? new Date(s.fetchedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                    const info = document.createElement('div');
+                    info.className = 'saved-info';
+                    info.innerHTML = \`<span class="saved-mode">🗃️ \${s.name}</span><span class="saved-meta">\${time} 拉取 · 内容加密存储</span>\`;
+                    const actions = document.createElement('div');
+                    actions.className = 'saved-actions';
+                    const refreshBtn = document.createElement('button');
+                    refreshBtn.className = 'saved-btn';
+                    refreshBtn.innerText = '刷新';
+                    refreshBtn.onclick = async () => {
+                        try {
+                            refreshBtn.disabled = true;
+                            const r = await fetch('/api/source/refresh', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: s.id }),
+                            }).then((x) => x.json());
+                            if (!r.success) throw new Error(r.error || '刷新失败');
+                            showToast(\`✓ 已刷新「\${s.name}」，相关短链将自动重新生成\`, 'success');
+                            loadSourceLibrary();
+                        } catch (err) {
+                            showToast(\`✗ \${err.message}\`, 'error');
+                        } finally {
+                            refreshBtn.disabled = false;
+                        }
+                    };
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'saved-btn saved-btn-danger';
+                    delBtn.innerText = '删除';
+                    delBtn.onclick = async () => {
+                        if (!confirm(\`删除原始订阅「\${s.name}」？已生成缓存的短链仍可访问，但无法重新生成。\`)) return;
+                        try {
+                            const r = await fetch('/api/source/delete', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: s.id }),
+                            }).then((x) => x.json());
+                            if (!r.success) throw new Error(r.error || '删除失败');
+                            showToast('✓ 已删除', 'success');
+                            loadSourceLibrary();
+                        } catch (err) {
+                            showToast(\`✗ \${err.message}\`, 'error');
+                        }
+                    };
+                    actions.append(refreshBtn, delBtn);
+                    row.append(info, actions);
+                    box.appendChild(row);
+                });
+            } catch (err) {
+                box.innerHTML = '';
+                console.warn('原始订阅库不可用', err.message);
+            }
+        }
+
+        loadSourceLibrary();`;
+    return subpageShell(e, {
+        title: '原始订阅库 · 星尘转换器',
+        heroIcon: '🗃️',
+        heroTitle: '原始订阅库',
+        badge: '内容加密存储',
+        body,
+        script,
+    });
 }
