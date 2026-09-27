@@ -45,10 +45,11 @@ export async function getmihomo_config(e) {
     Rule_Data.data['proxy-groups'] = getProxies_Grouping(Proxies_Data.data, Rule_Data.data, e);
     Rule_Data.data['proxy-providers'] = Proxies_Data.data.providers;
     applyTemplate(config, Rule_Data.data, e);
+    // 返回对象，由 handler 序列化为 Clash YAML（nodelist 路径仍为 JSON 字符串）
     return {
         status: Proxies_Data.status,
         headers: Proxies_Data.headers,
-        data: JSON.stringify(config, null, 4),
+        data: config,
     };
 }
 
