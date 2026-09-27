@@ -3,6 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import { buildConfig } from './utils/env.js';
 import { handleRequest } from './utils/handler.js';
+import { configureRelay } from './utils/relayFetch.js';
+
+// Node/Vercel 环境同样支持出站中转（FETCH_RELAY_URL / FETCH_RELAY_TOKEN）
+configureRelay(process.env);
 
 async function handler(req, res) {
     const e = buildConfig(req, process.env, true);

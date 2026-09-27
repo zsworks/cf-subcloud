@@ -1,5 +1,7 @@
 import YAML from 'yaml';
 import { buildApiUrl } from './ApiUrl.js';
+import { getRelayConfig } from './relayFetch.js';
+import { ASSET_MARKER, getAssetFetcher } from './assetsFetch.js';
 
 /**
  * 请求 URL 并解析响应数据。
@@ -16,28 +18,63 @@ import { buildApiUrl } from './ApiUrl.js';
  *   error?: Error
  * }>} 请求结果
  */
+// 经 Vercel 中转拉取；中转自身故障（不可达 / x-relay-error）时返回 null 由调用方回退直连，
+// 上游真实响应状态（含 403）原样返回不回退
+async function fetchViaRelay(url, userAgent) {
+    const { base, token } = getRelayConfig();
+    try {
+        const u = new URL(base);
+        u.searchParams.set('url', url);
+        u.searchParams.set('ua', userAgent);
+        const res = await fetch(u, {
+            method: 'GET',
+            headers: { 'x-relay-token': token },
+        });
+        if (res.headers.get('x-relay-error')) {
+            console.error('中转返回错误，回退直连:', url);
+            return null;
+        }
+        return res;
+    } catch (error) {
+        console.error('中转不可达，回退直连:', url, error?.message);
+        return null;
+    }
+}
+
 async function fetchResponse(url, userAgent) {
     if (!userAgent) {
         userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3';
     }
-    let response;
-    try {
-        response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'User-Agent': userAgent,
-            },
-        });
-    } catch (error) {
-        console.error(error);
-        return {
-            status: 0,
-            headers: {},
-            data: null,
-            error,
-        };
+    let response = null;
+    if (String(url).startsWith(ASSET_MARKER)) {
+        const fetchAsset = getAssetFetcher();
+        if (fetchAsset) {
+            response = await fetchAsset(String(url).slice(ASSET_MARKER.length));
+        } else {
+            return { status: 0, headers: {}, data: null, error: new Error('ASSETS 绑定不可用') };
+        }
+    }
+    if (!response) response = getRelayConfig() ? await fetchViaRelay(url, userAgent) : null;
+    if (!response) {
+        try {
+            response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'User-Agent': userAgent,
+                },
+            });
+        } catch (error) {
+            console.error(error);
+            return {
+                status: 0,
+                headers: {},
+                data: null,
+                error,
+            };
+        }
     }
     const rawHeaders = Object.fromEntries(response.headers.entries());
+    const viaRelay = rawHeaders['x-relay-upstream-status'] !== undefined;
     const hopByHopHeaders = ['transfer-encoding', 'content-length', 'content-encoding', 'connection'];
     const headers = {};
     for (const [key, value] of Object.entries(rawHeaders)) {
@@ -62,6 +99,7 @@ async function fetchResponse(url, userAgent) {
         status: response.status,
         headers,
         data,
+        via: viaRelay ? 'relay' : 'direct',
     };
 }
 

@@ -1,0 +1,13 @@
+{
+    "functions": {
+        "api/relay.js": {
+            "maxDuration": 30
+        }
+    },
+    "rewrites": [
+        {
+            "source": "/relay",
+            "destination": "/api/relay"
+        }
+    ]
+}
