@@ -37,6 +37,7 @@ export async function handleRequest(e) {
         status: 200,
         headers: {
             'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-cache',
         },
         body: html,
     };

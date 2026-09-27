@@ -18,7 +18,7 @@ export default {
                 e.view = pathname === '/saved' ? 'saved' : 'sources';
                 const html = await getFakePage(e);
                 return new Response(html, {
-                    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+                    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' },
                 });
             }
 
