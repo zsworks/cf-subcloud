@@ -3013,8 +3013,8 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=yP.generate
         }
 
         // \u8BA2\u9605\u884C\u5DE5\u5177\u56FE\u6807\uFF08\u6E10\u53D8 SVG\uFF0C\u4E0E\u56FE\u6807\u8BBE\u8BA1\u7A3F\u5BF9\u5E94\uFF09
-        const SRC_PICK_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="lg-src-pick" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#38bdf8"/></linearGradient></defs><g fill="url(#lg-src-pick)"><rect x="2" y="3.2" width="20" height="2.6" rx="1.3"/><rect x="2" y="9.2" width="20" height="2.6" rx="1.3"/><rect x="2" y="15.2" width="8.5" height="2.6" rx="1.3"/><rect x="2" y="21" width="8.5" height="2.6" rx="1.3"/></g><path d="M13.4 15.6 L16.9 19.3 L22.3 13.1" fill="none" stroke="url(#lg-src-pick)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-        const SRC_SAVE_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="lg-src-save" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f97316"/><stop offset="1" stop-color="#fde047"/></linearGradient></defs><path fill="url(#lg-src-save)" d="M2 4.5 C2 3.7 2.7 3 3.5 3 H8.6 C9 3 9.4 3.2 9.7 3.5 L11.6 5.5 H20.5 C21.3 5.5 22 6.2 22 7 V19 C22 19.8 21.3 20.5 20.5 20.5 H3.5 C2.7 20.5 2 19.8 2 19 Z"/><circle cx="12" cy="15" r="6" fill="#fff"/><path d="M12 11.6 V16 M9.9 14 L12 16.1 L14.1 14 M9 16.6 V17 A3 3 0 0 0 15 17 V16.6" fill="none" stroke="url(#lg-src-save)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        const SRC_PICK_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" style="display:block" xmlns="http://www.w3.org/2000/svg"><g fill="url(#lg-src-pick)"><rect x="2" y="3.2" width="20" height="2.6" rx="1.3"/><rect x="2" y="9.2" width="20" height="2.6" rx="1.3"/><rect x="2" y="15.2" width="8.5" height="2.6" rx="1.3"/><rect x="2" y="21" width="8.5" height="2.6" rx="1.3"/></g><path d="M13.4 15.6 L16.9 19.3 L22.3 13.1" fill="none" stroke="url(#lg-src-pick)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        const SRC_SAVE_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" style="display:block" xmlns="http://www.w3.org/2000/svg"><path fill="url(#lg-src-save)" d="M2 4.5 C2 3.7 2.7 3 3.5 3 H8.6 C9 3 9.4 3.2 9.7 3.5 L11.6 5.5 H20.5 C21.3 5.5 22 6.2 22 7 V19 C22 19.8 21.3 20.5 20.5 20.5 H3.5 C2.7 20.5 2 19.8 2 19 Z"/><circle cx="12" cy="15" r="6" fill="#fff"/><path d="M12 11.6 V16 M9.9 14 L12 16.1 L14.1 14 M9 16.6 V17 A3 3 0 0 0 15 17 V16.6" fill="none" stroke="url(#lg-src-save)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         const SRC_REMOVE_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="11" fill="#ee5a5a"/><rect x="5.5" y="10.3" width="13" height="3.4" rx="1" fill="#fff"/></svg>';
         const ADD_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="22" height="22" rx="5.8" fill="#22c55e"/><path d="M12 7 V17 M7 12 H17" fill="none" stroke="#fff" stroke-width="2.7" stroke-linecap="round"/></svg>';
 
@@ -3029,6 +3029,10 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=yP.generate
                 ensureTrailingEmptyRow(rows[rows.length - 1]);
             }
         }
+
+        // \u5171\u4EAB\u6E10\u53D8\u5B9A\u4E49\uFF08\u5168\u9875\u552F\u4E00 id\uFF0C\u52A8\u6001\u63D2\u5165\u7684\u56FE\u6807\u7EDF\u4E00\u5F15\u7528\uFF0C\u907F\u514D\u91CD\u590D id \u6E32\u67D3\u5F02\u5E38\uFF09
+        const ICON_GRAD_DEFS = '<svg width="0" height="0" style="position:absolute" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="lg-src-pick" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#38bdf8"/></linearGradient><linearGradient id="lg-src-save" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f97316"/><stop offset="1" stop-color="#fde047"/></linearGradient></defs></svg>';
+        document.body.insertAdjacentHTML('afterbegin', ICON_GRAD_DEFS);
 
         function addLinkRow(containerId, modeId) {
             const linksContainer = document.getElementById(containerId);
