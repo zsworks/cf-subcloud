@@ -14,3 +14,6 @@ binding = "ASSETS"
 binding = "SHORT_LINK"
 database_name = "cf-subcloud-links"
 database_id = "1896b371-dca1-4bcb-93e1-c6c6be40f39e"
+
+[vars]
+TPLMH = "https://raw.githubusercontent.com/zsworks/rulesets/refs/heads/main/mihomo/zsworks/configfull.yaml#zworks_full"

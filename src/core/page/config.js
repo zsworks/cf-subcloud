@@ -187,21 +187,26 @@ export default function configs(tplmh = null, tplsb = null) {
         },
     };
 
+    // 自定义模板条目：远程地址可追加 #名称 指定显示名（https://x/a.yaml#我的模板），
+    // 无 # 时回退为取 URL 文件名；value 永远是不含 # 的纯地址
+    const toCustomTemplates = (list) =>
+        list.map((i) => {
+            const hashIndex = i.indexOf('#');
+            if (hashIndex === -1) {
+                return { label: i.split('/').pop().split('?')[0], value: i };
+            }
+            const value = i.slice(0, hashIndex);
+            return { label: i.slice(hashIndex + 1) || value.split('/').pop().split('?')[0], value };
+        });
     if (tplmh) {
         data.mihomo.templates = {
-            ['自定义']: tplmh.map((i) => ({
-                label: i.split('/').pop().split('?')[0],
-                value: i,
-            })),
+            ['自定义']: toCustomTemplates(tplmh),
             ...data.mihomo.templates,
         };
     }
     if (tplsb) {
         data.singbox.templates = {
-            ['自定义']: tplsb.map((i) => ({
-                label: i.split('/').pop().split('?')[0],
-                value: i,
-            })),
+            ['自定义']: toCustomTemplates(tplsb),
             ...data.singbox.templates,
         };
     }

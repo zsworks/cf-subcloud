@@ -149,6 +149,9 @@ npm run deploy:workers
 | `TPLMH`    | mihomo 规则模板  | [mihomo模板参考](https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/mihomo/ACL4SSR_Online_Full.yaml)   |
 | `TPLSB`    | singbox 规则模板 | [singbox模板参考](https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/singbox/ACL4SSR_Online_Full.yaml) |
 
+> `TPLMH` / `TPLSB` 支持多条远程模板，换行分隔；条目可追加 `#名称` 自定义下拉框显示名，
+> 例如 `https://raw.githubusercontent.com/user/repo/main/mihomo/configfull.yaml#zworks_full`，不追加时显示 URL 文件名。
+
 ---
 
 ## 🤝 参与贡献
