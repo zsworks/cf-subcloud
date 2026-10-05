@@ -54,7 +54,8 @@ export async function getmihomo_config(e) {
 }
 
 /**
- * 将模板中的 proxies、proxy-groups、rules 等字段合并到目标配置对象
+ * 将模板中的 proxies、proxy-groups、rules 等字段合并到目标配置对象；
+ * 模板自带 dns/tun/sniffer/ntp/profile 基础段时整段优先于内置默认
  * @param {Object} target - 目标配置对象（基础配置）
  * @param {Object} template - 模板配置对象
  */
@@ -67,6 +68,13 @@ export function applyTemplate(top, rule, e) {
     top.rules = [...(top.rules || []), ...(rule.rules || [])];
     top['sub-rules'] = rule['sub-rules'] || {};
     top['rule-providers'] = { ...(top['rule-providers'] || {}), ...(rule['rule-providers'] || {}) };
+    // 模板自带 DNS/TUN 等基础段时优先用模板的（保留 configfull 之类完整配置的防泄露方案），
+    // 纯分流模板未携带这些段时仍沿用内置默认；hosts 取合并，保留内置 DoH 引导映射
+    for (const key of ['dns', 'tun', 'sniffer', 'ntp', 'profile']) {
+        if (rule[key]) top[key] = rule[key];
+    }
+    if (rule.hosts) top.hosts = { ...top.hosts, ...rule.hosts };
+    const dnsFromTemplate = Boolean(rule.dns);
     const proxyName = rule['proxy-groups'][0].name;
     if (top.dns.nameserver && rule['proxy-groups'][0].name) {
         top.dns.nameserver = top.dns.nameserver.map((ns) => {
@@ -88,7 +96,8 @@ export function applyTemplate(top, rule, e) {
             top.tun['exclude-package'] = e.Package || [];
         }
     }
-    if (e.adgdns) {
+    // 模板自带 DNS 时不强制切换 AdGuard，保留模板自己的解析方案
+    if (e.adgdns && !dnsFromTemplate) {
         top.dns.nameserver = [`https://dns.adguard-dns.com/dns-query#${proxyName}`];
         top.dns['nameserver-policy']['RULE-SET:private_domain,cn_domain'] = ['https://doh.18bit.cn/dns-query#DIRECT'];
     }
