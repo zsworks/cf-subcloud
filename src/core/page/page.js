@@ -1035,9 +1035,36 @@ function homePageHtml(e, configJson) {
             if (!container) return;
 
             container.querySelectorAll('.template-opt').forEach((o) => o.classList.remove('selected'));
+            // 移除上次回填注入的保留模板项，按本次参数重新注入
+            container.querySelectorAll('.template-keep-group').forEach((g) => g.remove());
             const label = document.getElementById(\`selectedLabel-\${modeId}\`);
             if (params.template && label) {
-                const opt = container.querySelector(\`.template-opt[data-value="\${CSS.escape(params.template)}"]\`);
+                let opt = container.querySelector(\`.template-opt[data-value="\${CSS.escape(params.template)}"]\`);
+                if (!opt) {
+                    // 保存的模板不在当前列表（自定义模板已变更等）：注入「原保存模板」保留项，避免更新时丢模板
+                    const dropdown = container.querySelector('#dropdown-' + modeId);
+                    if (dropdown) {
+                        const group = document.createElement('div');
+                        group.className = 'template-group template-keep-group';
+                        const header = document.createElement('div');
+                        header.className = 'template-group-header';
+                        header.innerText = '已保存';
+                        opt = document.createElement('div');
+                        opt.className = 'template-opt';
+                        opt.innerText = '原保存模板';
+                        opt.dataset.value = params.template;
+                        opt.title = params.template;
+                        opt.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            dropdown.querySelectorAll('.template-opt').forEach((el) => el.classList.remove('selected'));
+                            opt.classList.add('selected');
+                            label.innerText = opt.innerText;
+                            dropdown.classList.remove('open');
+                        });
+                        group.append(header, opt);
+                        dropdown.appendChild(group);
+                    }
+                }
                 if (opt) {
                     opt.classList.add('selected');
                     label.innerText = opt.innerText;
@@ -1096,16 +1123,17 @@ function homePageHtml(e, configJson) {
                 }
             }
 
-            // 生成的完整参数（保存短链用）；直接链接仅由裸 URL 构成（已入库源以名称提示）
+            // 生成的完整参数（保存短链用）；直接链接 = 全部表单参数 + url（裸订阅）或 src（已入库源名称）
             window.lastGen = { sources: sources.map((s) => s.id), rawUrls, target: modeId, params: Object.fromEntries(params.entries()) };
-            let fullUrl = '';
+            const displayParams = new URLSearchParams(params);
             if (!sources.length) {
-                const displayParams = new URLSearchParams(params);
                 displayParams.set('url', rawUrls.join(','));
-                fullUrl = \`\${origin}/?\${displayParams.toString()}\`;
             } else {
-                fullUrl = \`\${origin}/?target=\${modeId}&src=\${encodeURIComponent(sources.map((s) => s.name).join(','))}\`;
-                showToast('含已入库订阅源，直接链接不可用，请使用「🔒 保存订阅内容」生成短链接', 'success');
+                displayParams.set('src', sources.map((s) => s.name).join(','));
+            }
+            const fullUrl = \`\${origin}/?\${displayParams.toString()}\`;
+            if (sources.length) {
+                showToast('已入库源以名称引用，直链仅本部署可用；跨端共享请用「🔒 保存订阅内容」短链接', 'success');
             }
 
             updateResultAndQR(fullUrl);
