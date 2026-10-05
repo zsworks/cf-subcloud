@@ -78,13 +78,15 @@ export function buildConfig(request, env, isNode = false) {
     if (templateBaseUrl) data.templateBaseUrl = templateBaseUrl;
     const template = getParam('template');
     if (template && !isUrl(template)) {
+        // 允许省略开头的 /（?template=default.yaml 与 /default.yaml 等价），拼接路径前归一化
+        const tplPath = template.startsWith('/') ? template : `/${template}`;
         if (templateBaseUrl) {
-            data.rule = `${templateBaseUrl}/${data.target}${template}`;
+            data.rule = `${templateBaseUrl}/${data.target}${tplPath}`;
         } else if (isNode) {
-            data.rule = `${url.origin}/template/${data.target}${template}`;
+            data.rule = `${url.origin}/template/${data.target}${tplPath}`;
         } else {
             // CF Worker：静态模板经 ASSETS 绑定进程内读取（subrequest 自域名会被 Bot 防护挑战）
-            data.rule = `${ASSET_MARKER}/${data.target}${template}`;
+            data.rule = `${ASSET_MARKER}/${data.target}${tplPath}`;
         }
     } else {
         data.rule = template;
