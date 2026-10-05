@@ -46,51 +46,51 @@ export default function configs(tplmh = null, tplsb = null) {
                 通用: [
                     {
                         label: '默认(ACL4SSR_Online_Full)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/mihomo/ACL4SSR_Online_Full.yaml',
+                        value: '/ACL4SSR_Online_Full.yaml',
                     },
                     {
                         label: '默认(全分组)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/mihomo/default_full.yaml',
+                        value: '/default_full.yaml',
                     },
                     {
                         label: '默认(精简版)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/mihomo/default.yaml',
+                        value: '/default.yaml',
                     },
                 ],
                 'Lanlan13-14': [
                     {
                         label: 'configfull 全分组版 (秋风去广告)',
-                        value: 'https://raw.githubusercontent.com/Lanlan13-14/Rules/refs/heads/main/configfull.yaml',
+                        value: '/Lanlan13-14/configfull.yaml',
                     },
                     {
                         label: 'configfull_NoAd (无广告)',
-                        value: 'https://raw.githubusercontent.com/Lanlan13-14/Rules/refs/heads/main/configfull_NoAd.yaml',
+                        value: '/Lanlan13-14/configfull_NoAd.yaml',
                     },
                     {
                         label: 'configfull_NoAd_lite (精简)',
-                        value: 'https://raw.githubusercontent.com/Lanlan13-14/Rules/refs/heads/main/configfull_NoAd_lite.yaml',
+                        value: '/Lanlan13-14/configfull_NoAd_lite.yaml',
                     },
                     {
                         label: 'configfull_lite (精简版)',
-                        value: 'https://raw.githubusercontent.com/Lanlan13-14/Rules/refs/heads/main/configfull_lite.yaml',
+                        value: '/Lanlan13-14/configfull_lite.yaml',
                     },
                     {
                         label: 'configfull_beta',
-                        value: 'https://raw.githubusercontent.com/Lanlan13-14/Rules/refs/heads/main/configfull_beta.yaml',
+                        value: '/Lanlan13-14/configfull_beta.yaml',
                     },
                 ],
                 'mihomo-party-org': [
                     {
                         label: '布丁狗的订阅转换',
-                        value: 'https://raw.githubusercontent.com/mihomo-party-org/override-hub/refs/heads/main/yaml/布丁狗的订阅转换.yaml',
+                        value: '/mihomo-party-org/布丁狗的订阅转换.yaml',
                     },
                     {
                         label: 'ACL4SSR_Online_Full',
-                        value: 'https://raw.githubusercontent.com/mihomo-party-org/override-hub/refs/heads/main/yaml/ACL4SSR_Online_Full.yaml',
+                        value: '/mihomo-party-org/ACL4SSR_Online_Full.yaml',
                     },
                     {
                         label: 'ACL4SSR_Online_Full_WithIcon',
-                        value: 'https://raw.githubusercontent.com/mihomo-party-org/override-hub/refs/heads/main/yaml/ACL4SSR_Online_Full_WithIcon.yaml',
+                        value: '/mihomo-party-org/ACL4SSR_Online_Full_WithIcon.yaml',
                     },
                 ],
             },
@@ -164,15 +164,15 @@ export default function configs(tplmh = null, tplsb = null) {
                 通用: [
                     {
                         label: '默认(ACL4SSR_Online_Full)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/singbox/ACL4SSR_Online_Full.yaml',
+                        value: '/ACL4SSR_Online_Full.yaml',
                     },
                     {
                         label: '默认(全分组)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/singbox/default_full.yaml',
+                        value: '/default_full.yaml',
                     },
                     {
                         label: '默认(精简版)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/singbox/default.yaml',
+                        value: '/default.yaml',
                     },
                 ],
             },
