@@ -23,10 +23,10 @@ export async function getsingbox_config(e) {
     if (Outbounds_Data?.data?.outbounds?.length === 0) {
         throw new Error(`节点为空，请使用有效订阅`);
     }
-    // 获取规则数据
+    // 获取规则数据（非对象说明上游返回了错误页/纯文本，如边缘 502 透传）
     const Rule_Data = alldata[1];
-    if (!Rule_Data?.data) {
-        throw new Error('获取规则数据失败');
+    if (!Rule_Data?.data || typeof Rule_Data.data !== 'object') {
+        throw new Error(`获取规则数据失败${Rule_Data?.status ? `（HTTP ${Rule_Data.status}）` : ''}`);
     }
 
     e.Package = alldata[2];

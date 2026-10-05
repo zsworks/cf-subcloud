@@ -34,6 +34,12 @@ async function fetchViaRelay(url, userAgent) {
             console.error('中转返回错误，回退直连:', url);
             return null;
         }
+        // 中转链路上的 5xx（边缘 502 / 源站故障）不代表上游真实应用响应，回退直连重试；
+        // 4xx（如机场 WAF 403）是上游真实状态，原样透出不回退
+        if (res.status >= 500) {
+            console.error(`中转返回 ${res.status}，回退直连:`, url);
+            return null;
+        }
         return res;
     } catch (error) {
         console.error('中转不可达，回退直连:', url, error?.message);

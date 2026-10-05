@@ -31,10 +31,10 @@ export async function getmihomo_config(e) {
     if (Proxies_Data?.data?.proxies?.length === 0) {
         throw new Error('节点为空，请使用有效订阅');
     }
-    // 获取规则数据
+    // 获取规则数据（非对象说明上游返回了错误页/纯文本，如边缘 502 透传）
     const Rule_Data = alldata[1];
-    if (!Rule_Data?.data) {
-        throw new Error('获取规则数据失败');
+    if (!Rule_Data?.data || typeof Rule_Data.data !== 'object') {
+        throw new Error(`获取规则数据失败${Rule_Data?.status ? `（HTTP ${Rule_Data.status}）` : ''}`);
     }
 
     // 处理路由的排除配置

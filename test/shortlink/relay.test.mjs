@@ -96,3 +96,22 @@ test('中转不可达（网络错误）时回退直连；上游403经中转原�
     const r2 = await fetchResponse('https://up.example/sub', 'ua');
     assert.equal(r2.status, 403);
 });
+
+test('中转链路返回 5xx（无 x-relay-error，如边缘 502）视为链路故障回退直连', async (t) => {
+    const real = global.fetch;
+    t.after(() => {
+        global.fetch = real;
+        configureRelay(null);
+    });
+    configureRelay({ FETCH_RELAY_URL: RELAY, FETCH_RELAY_TOKEN: 'tok-1' });
+    const calls = captureFetch([
+        new Response('error code: 502', { status: 502, headers: { 'content-type': 'text/plain' } }),
+        new Response('proxy-groups: []', { status: 200 }),
+    ]);
+    const r = await fetchResponse('https://raw.githubusercontent.com/x/t.yaml', 'ua');
+    assert.equal(calls.length, 2);
+    assert.ok(calls[0].url.startsWith(RELAY));
+    assert.equal(calls[1].url, 'https://raw.githubusercontent.com/x/t.yaml');
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.data, { 'proxy-groups': [] });
+});
