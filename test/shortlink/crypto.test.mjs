@@ -35,6 +35,32 @@ test('不同环境密钥无法互相解密', async () => {
     await assert.rejects(() => decryptBlob(blob, b.encKey));
 });
 
+test('getKeys：原始串与其 SHA256 十六进制派生同一加密密钥', async () => {
+    const raw = await getKeys({ LINK_ENC_KEY: 'secret-string' });
+    const digestHex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('secret-string')))]
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    const hashed = await getKeys({ LINK_ENC_KEY: digestHex });
+    const blob = await encryptBlob({ x: 'same-key' }, raw.encKey);
+    assert.deepEqual(await decryptBlob(blob, hashed.encKey), { x: 'same-key' });
+});
+
+test('decryptBlob 密钥数组：当前派生优先，旧派生（+enc 后缀）回退', async () => {
+    const envKey = 'legacy-key';
+    // 旧派生：SHA256(envKey + 'enc')，模拟历史版本写入的密文
+    const legacyRaw = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(envKey + 'enc')));
+    const legacyEncKey = await crypto.subtle.importKey('raw', legacyRaw, 'AES-GCM', false, ['encrypt', 'decrypt']);
+    const legacyBlob = await encryptBlob({ old: true }, legacyEncKey);
+    // 单独用当前派生解不开
+    const current = await getKeys({ LINK_ENC_KEY: envKey });
+    await assert.rejects(() => decryptBlob(legacyBlob, current.encKey));
+    // 数组形式回退成功
+    assert.deepEqual(await decryptBlob(legacyBlob, current.encKeys), { old: true });
+    // 当前派生写入的密文优先命中第一把钥匙
+    const newBlob = await encryptBlob({ new: true }, current.encKey);
+    assert.deepEqual(await decryptBlob(newBlob, current.encKeys), { new: true });
+});
+
 test('hmacB64url 确定性、可区分、base64url 字符集', async () => {
     const { hmacKey } = await getKeys(ENV);
     const h1 = await hmacB64url('https://a.com/sub', hmacKey);

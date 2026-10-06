@@ -5,17 +5,32 @@ const IV_LENGTH = 12;
 let cachedEnvKey;
 let cachedKeys;
 
-// 同一 isolate 内按环境变量值缓存派生密钥
+function hexToBytes(hex) {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    return bytes;
+}
+
+// 同一 isolate 内按环境变量值缓存派生密钥。
+// 加密密钥：LINK_ENC_KEY 为 64 位十六进制时视为已是 SHA256 摘要直接使用，否则取其 SHA256；
+// encKeys = [当前派生, 旧派生 SHA256(envKey+'enc')]——解密时依次回退，兼容历史密文（写入一律用当前密钥）
 export async function getKeys(env) {
-    const envKey = env?.LINK_ENC_KEY;
+    const envKey = String(env?.LINK_ENC_KEY ?? '');
     if (!envKey) throw new Error('短链接功能未启用：未配置 LINK_ENC_KEY 环境变量');
     if (cachedEnvKey === envKey) return cachedKeys;
-    const encRaw = await crypto.subtle.digest('SHA-256', encoder.encode(String(envKey) + 'enc'));
-    const authRaw = await crypto.subtle.digest('SHA-256', encoder.encode(String(envKey) + 'auth'));
+    let encRaw;
+    if (/^[0-9a-fA-F]{64}$/.test(envKey)) {
+        encRaw = hexToBytes(envKey);
+    } else {
+        encRaw = new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(envKey)));
+    }
     const encKey = await crypto.subtle.importKey('raw', encRaw, 'AES-GCM', false, ['encrypt', 'decrypt']);
+    const legacyRaw = new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(envKey + 'enc')));
+    const legacyEncKey = await crypto.subtle.importKey('raw', legacyRaw, 'AES-GCM', false, ['decrypt']);
+    const authRaw = await crypto.subtle.digest('SHA-256', encoder.encode(envKey + 'auth'));
     const hmacKey = await crypto.subtle.importKey('raw', authRaw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     cachedEnvKey = envKey;
-    cachedKeys = { encKey, hmacKey };
+    cachedKeys = { encKey, legacyEncKey, encKeys: [encKey, legacyEncKey], hmacKey };
     return cachedKeys;
 }
 
@@ -50,8 +65,18 @@ export async function decryptBlob(b64, encKey) {
     const combined = base64ToBytes(b64);
     const iv = combined.subarray(0, IV_LENGTH);
     const data = combined.subarray(IV_LENGTH);
-    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, encKey, data);
-    return JSON.parse(new TextDecoder().decode(plain));
+    // 支持传入密钥数组：依次尝试（当前派生优先，历史派生回退）
+    const keys = Array.isArray(encKey) ? encKey : [encKey];
+    let lastError;
+    for (const key of keys) {
+        try {
+            const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+            return JSON.parse(new TextDecoder().decode(plain));
+        } catch (e) {
+            lastError = e;
+        }
+    }
+    throw lastError;
 }
 
 export async function hmacB64url(message, hmacKey) {

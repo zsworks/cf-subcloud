@@ -131,13 +131,13 @@ export async function listLinks(db, env, page = 1, limit = 5) {
         .prepare('SELECT code, created, pw_hash FROM short_links ORDER BY created DESC, code LIMIT ? OFFSET ?')
         .bind(limit, (page - 1) * limit)
         .all();
-    const { encKey } = await getKeys(env);
+    const { encKeys } = await getKeys(env);
     const items = [];
     for (const r of rows.results || []) {
         let label = null;
         try {
             const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(r.code).first();
-            label = (await decryptBlob(row.blob, encKey)).label ?? null;
+            label = (await decryptBlob(row.blob, encKeys)).label ?? null;
         } catch {
             // 单条解密失败不影响列表
         }
@@ -150,10 +150,10 @@ export async function getLink(db, env, code, key) {
     await ensureShortLinkTable(db);
     const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(code).first();
     if (!row) return { notFound: true };
-    const { encKey, hmacKey } = await getKeys(env);
+    const { encKey, hmacKey, encKeys } = await getKeys(env);
     // 无口令行免验证；带口令行必须验证
     if (row.pw_hash && !(await verifyPw(row.pw_hash, key || '', hmacKey))) throw new Error('访问口令错误');
-    const obj = await decryptBlob(row.blob, encKey);
+    const obj = await decryptBlob(row.blob, encKeys);
     const sources = await Promise.all(
         (obj.sources || []).map(async (id) => {
             const s = await getSource(db, env, id);
@@ -195,8 +195,8 @@ export async function serveLink(request, env, code, keyB64, generator = handleRe
         const pw = new TextDecoder().decode(base64ToBytes(keyB64.replace(/ /g, '+')));
         if (!(await verifyPw(row.pw_hash, pw, hmacKey))) return jsonError('访问口令错误', 400);
     }
-    const { encKey } = await getKeys(env);
-    const obj = await decryptBlob(row.blob, encKey);
+    const { encKeys } = await getKeys(env);
+    const obj = await decryptBlob(row.blob, encKeys);
 
     // 收集源缓存内容；源已删除则无法重新生成
     const items = [];

@@ -113,8 +113,8 @@ export async function getSource(db, env, id) {
     await ensureSourceTable(db);
     const row = await db.prepare('SELECT * FROM sub_sources WHERE id = ?').bind(id).first();
     if (!row) return null;
-    const { encKey } = await getKeys(env);
-    const obj = await decryptBlob(row.blob, encKey);
+    const { encKeys } = await getKeys(env);
+    const obj = await decryptBlob(row.blob, encKeys);
     return { id: row.id, name: row.name, url: obj.url, content: obj.content, headers: obj.headers || {}, fetchedAt: row.fetched_at, ua: row.ua || DEFAULT_SOURCE_UA, code: row.code || null };
 }
 
