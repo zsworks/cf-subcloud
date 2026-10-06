@@ -96,9 +96,8 @@ export async function handleShortLink(request, env) {
         const code = url.searchParams.get('code') || '';
         const keyB64 = url.searchParams.get('key') || '';
         if (!/^[A-Za-z0-9]{4,16}$/.test(code)) throw new Error('无效的短码');
-        if (!keyB64) throw new Error('缺少访问口令');
-        // key 为口令的 base64 编码（URL 传输中 + 会被解码为空格，需还原）
-        const pw = new TextDecoder().decode(base64ToBytes(keyB64.replace(/ /g, '+')));
+        // key 可选：无口令短链免 key；带口令行由 getLink 内部校验
+        const pw = keyB64 ? new TextDecoder().decode(base64ToBytes(keyB64.replace(/ /g, '+'))) : '';
         const r = await getLink(db, env, code, pw);
         if (r.notFound) return notFound('短链接不存在');
         return jsonResponse({ success: true, code, ...r });
@@ -107,8 +106,8 @@ export async function handleShortLink(request, env) {
         if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
         const { code, key } = await request.json();
         if (!code || !/^[A-Za-z0-9]{4,16}$/.test(String(code))) throw new Error('无效的短码');
-        if (!key) throw new Error('缺少访问口令');
-        const r = await deleteLink(db, env, String(code), String(key));
+        // key 可选：无口令短链免验；带口令行由 deleteLink 内部校验
+        const r = await deleteLink(db, env, String(code), key === undefined || key === null ? '' : String(key));
         if (r.notFound) return notFound('短链接不存在');
         return jsonResponse({ success: true });
     }

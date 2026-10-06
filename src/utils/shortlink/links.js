@@ -60,9 +60,10 @@ async function verifyPw(rowPwHash, pw, hmacKey) {
 
 export async function saveLink(db, env, body = {}) {
     await ensureShortLinkTable(db);
+    // key 可选：不传即无口令短链（内容仍由服务端密钥加密，访问 /s/{code} 免 key）
     const { sources, rawUrls, target, params = {}, label, key, code: existingCode, oldKey } = body;
-    if (!key) throw new Error('缺少访问口令');
     if (!target) throw new Error('缺少 target 参数');
+    const hasPw = typeof key === 'string' && key.trim().length > 0;
     const srcIds = Array.isArray(sources) ? sources.map(String).filter((s) => ID_RE.test(s)) : [];
     const raws = Array.isArray(rawUrls) ? rawUrls.map(String).filter((u) => /^https?:\/\//.test(u)) : [];
     if (!srcIds.length && !raws.length) throw new Error('至少需要一个订阅来源');
@@ -74,13 +75,15 @@ export async function saveLink(db, env, body = {}) {
         code = existingCode;
         const oldRow = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(code).first();
         if (!oldRow) return { notFound: true };
-        if (!oldKey || !(await verifyPw(oldRow.pw_hash, oldKey, hmacKey))) {
+        // 仅带口令的行需要 oldKey 验证
+        if (oldRow.pw_hash && (!oldKey || !(await verifyPw(oldRow.pw_hash, oldKey, hmacKey)))) {
             throw new Error('更新失败：需要提供该订阅的原始口令');
         }
     }
 
-    // 内容查重键：规范化序列化（键序无关）后取 MD5；label/口令/缓存内容不参与，同配置即同一条
-    const urlMd5 = await md5Hex(canonicalStringify({ target, params, sources: srcIds, rawUrls: raws }));
+    // 内容查重键：规范化序列化（键序无关）后取 MD5；label/口令/缓存内容不参与，
+    // 是否带口令参与（避免无口令保存命中带口令短码后无法访问）；同配置即同一条
+    const urlMd5 = await md5Hex(canonicalStringify({ target, params, sources: srcIds, rawUrls: raws, pw: hasPw }));
     const dup = await db.prepare('SELECT code, pw_hash FROM short_links WHERE url_md5 = ? LIMIT 1').bind(urlMd5).first();
     if (dup?.code && dup.code !== code) {
         // 更新成与其他行相同的内容：删除本行，复用既有短码
@@ -90,7 +93,7 @@ export async function saveLink(db, env, body = {}) {
         return {
             code: dup.code,
             reused: true,
-            keyMatches: await verifyPw(dup.pw_hash, key, hmacKey),
+            keyMatches: dup.pw_hash ? await verifyPw(dup.pw_hash, key || '', hmacKey) : true,
         };
     }
 
@@ -109,14 +112,14 @@ export async function saveLink(db, env, body = {}) {
                 `INSERT INTO short_links (code, blob, pw_hash, created, url_md5) VALUES (?, ?, ?, ?, ?)
              ON CONFLICT(code) DO UPDATE SET blob = excluded.blob, pw_hash = excluded.pw_hash, url_md5 = excluded.url_md5`,
             )
-            .bind(code, blob, await pwHash(key, hmacKey), Date.now(), urlMd5)
+            .bind(code, blob, hasPw ? await pwHash(key, hmacKey) : '', Date.now(), urlMd5)
             .run();
     } catch (err) {
         // 并发下唯一索引兜底：他人已插入同内容行，同样复用
         if (!/UNIQUE/i.test(String(err?.message))) throw err;
         const winner = await db.prepare('SELECT code, pw_hash FROM short_links WHERE url_md5 = ? LIMIT 1').bind(urlMd5).first();
         if (!winner?.code) throw err;
-        return { code: winner.code, reused: true, keyMatches: await verifyPw(winner.pw_hash, key, hmacKey) };
+        return { code: winner.code, reused: true, keyMatches: winner.pw_hash ? await verifyPw(winner.pw_hash, key || '', hmacKey) : true };
     }
     return { code };
 }
@@ -125,7 +128,7 @@ export async function listLinks(db, env, page = 1, limit = 5) {
     await ensureShortLinkTable(db);
     const { total } = await db.prepare('SELECT COUNT(*) AS total FROM short_links').first();
     const rows = await db
-        .prepare('SELECT code, created FROM short_links ORDER BY created DESC, code LIMIT ? OFFSET ?')
+        .prepare('SELECT code, created, pw_hash FROM short_links ORDER BY created DESC, code LIMIT ? OFFSET ?')
         .bind(limit, (page - 1) * limit)
         .all();
     const { encKey } = await getKeys(env);
@@ -138,7 +141,7 @@ export async function listLinks(db, env, page = 1, limit = 5) {
         } catch {
             // 单条解密失败不影响列表
         }
-        items.push({ code: r.code, created: r.created, label });
+        items.push({ code: r.code, created: r.created, label, protected: Boolean(r.pw_hash) });
     }
     return { items, page, total, totalPages: Math.max(Math.ceil(total / limit), 1) };
 }
@@ -148,7 +151,8 @@ export async function getLink(db, env, code, key) {
     const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(code).first();
     if (!row) return { notFound: true };
     const { encKey, hmacKey } = await getKeys(env);
-    if (!(await verifyPw(row.pw_hash, key, hmacKey))) throw new Error('访问口令错误');
+    // 无口令行免验证；带口令行必须验证
+    if (row.pw_hash && !(await verifyPw(row.pw_hash, key || '', hmacKey))) throw new Error('访问口令错误');
     const obj = await decryptBlob(row.blob, encKey);
     const sources = await Promise.all(
         (obj.sources || []).map(async (id) => {
@@ -156,7 +160,7 @@ export async function getLink(db, env, code, key) {
             return { id, name: s?.name ?? null };
         }),
     );
-    return { target: obj.target, params: obj.params || {}, sources, rawUrls: obj.rawUrls || [], label: obj.label ?? null };
+    return { target: obj.target, params: obj.params || {}, sources, rawUrls: obj.rawUrls || [], label: obj.label ?? null, protected: Boolean(row.pw_hash) };
 }
 
 export async function deleteLink(db, env, code, key) {
@@ -164,7 +168,7 @@ export async function deleteLink(db, env, code, key) {
     const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(code).first();
     if (!row) return { notFound: true };
     const { hmacKey } = await getKeys(env);
-    if (!(await verifyPw(row.pw_hash, key, hmacKey))) throw new Error('访问口令错误');
+    if (row.pw_hash && !(await verifyPw(row.pw_hash, key || '', hmacKey))) throw new Error('访问口令错误');
     await db.prepare('DELETE FROM short_links WHERE code = ?').bind(code).run();
     return true;
 }
@@ -183,12 +187,15 @@ export async function serveLink(request, env, code, keyB64, generator = handleRe
     await ensureShortLinkTable(db);
     const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(code).first();
     if (!row) return jsonError('短链接不存在', 404);
-    if (!keyB64) return jsonError('该订阅内容已加密，请在短链接后附加 ?key=访问口令的base64编码', 400);
-
-    const { encKey, hmacKey } = await getKeys(env);
-    // key 为口令的 base64 编码（URL 传输中 + 会被解码为空格，需还原）
-    const pw = new TextDecoder().decode(base64ToBytes(keyB64.replace(/ /g, '+')));
-    if (!(await verifyPw(row.pw_hash, pw, hmacKey))) return jsonError('访问口令错误', 400);
+    // 无口令行免 key 直接访问；带口令行必须携带 ?key=
+    if (row.pw_hash) {
+        if (!keyB64) return jsonError('该订阅内容已加密，请在短链接后附加 ?key=访问口令的base64编码', 400);
+        const { encKey, hmacKey } = await getKeys(env);
+        // key 为口令的 base64 编码（URL 传输中 + 会被解码为空格，需还原）
+        const pw = new TextDecoder().decode(base64ToBytes(keyB64.replace(/ /g, '+')));
+        if (!(await verifyPw(row.pw_hash, pw, hmacKey))) return jsonError('访问口令错误', 400);
+    }
+    const { encKey } = await getKeys(env);
     const obj = await decryptBlob(row.blob, encKey);
 
     // 收集源缓存内容；源已删除则无法重新生成

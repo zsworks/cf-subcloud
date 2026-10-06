@@ -52,6 +52,31 @@ test('缺少 key 参数 → 400 提示', async (t) => {
     assert.match((await resp.json()).error, /key=访问口令/);
 });
 
+test('无口令短链：不带 key 直接实时生成；带口令行不受影响', async (t) => {
+    stubUpstream(t);
+    const db = createMockD1();
+    const env = createEnv(db);
+    const src = await saveSource(db, env, 'https://a.example/sub', 'A');
+    const r = await saveLink(db, env, { sources: [src.id], rawUrls: [], target: 'mihomo', params: { template: '/test.yaml' } });
+    assert.equal(await getLinkRowPwHash(db, r.code), '');
+
+    const gen = makeFakeGenerator();
+    // 不带 key 直接访问
+    const resp = await serveLink(new Request(`https://w.worker/s/${r.code}`), env, r.code, null, gen);
+    assert.equal(resp.status, 200);
+    assert.ok((await resp.text()).startsWith('GENERATED:'));
+    assert.equal(gen.calls.length, 1);
+    // 带 key 访问也无妨（无口令行忽略 key）
+    const resp2 = await serveLink(new Request(`https://w.worker/s/${r.code}?key=${b64Key('whatever')}`), env, r.code, b64Key('whatever'), gen);
+    assert.equal(resp2.status, 200);
+});
+
+// 读取短链行的 pw_hash（无口令行应为空串哨兵）
+async function getLinkRowPwHash(db, code) {
+    const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(code).first();
+    return row.pw_hash;
+}
+
 test('口令错误 → 400；口令正确 → 每次实时生成并携带参数与来源', async (t) => {
     stubUpstream(t);
     const db = createMockD1();

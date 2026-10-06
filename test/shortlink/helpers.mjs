@@ -88,9 +88,9 @@ export function createMockD1({ legacy = false, legacySources = false, noMd5 = fa
         if (/^SELECT COUNT\(\*\) AS total FROM short_links$/.test(s)) {
             return { total: state.short_links.length };
         }
-        if (/^SELECT code, created FROM short_links ORDER BY created DESC, code LIMIT \? OFFSET \?$/.test(s)) {
+        if (/^SELECT code, created, pw_hash FROM short_links ORDER BY created DESC, code LIMIT \? OFFSET \?$/.test(s)) {
             const rows = [...state.short_links].sort((a, b) => b.created - a.created || (a.code < b.code ? -1 : 1));
-            return rows.slice(args[1], args[1] + args[0]).map((r) => ({ code: r.code, created: r.created }));
+            return rows.slice(args[1], args[1] + args[0]).map((r) => ({ code: r.code, created: r.created, pw_hash: r.pw_hash }));
         }
         if (/^UPDATE sub_sources SET name = \? WHERE id = \?$/.test(s)) {
             const row = state.sub_sources.find((r) => r.id === args[1]);

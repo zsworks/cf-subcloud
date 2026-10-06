@@ -793,7 +793,6 @@ function homePageHtml(e, configJson) {
             <div class="result-header">
                 <span>📋 订阅地址 (点击输入框复制)</span>
                 <span style="display: flex; gap: 10px;">
-                    <span class="copy-hint" id="saveContentBtn">🔒 保存为短链</span>
                     <span class="copy-hint" id="copyToastBtn">📎 一键复制</span>
                 </span>
             </div>
@@ -928,59 +927,6 @@ function homePageHtml(e, configJson) {
             return btoa(String.fromCharCode(...new TextEncoder().encode(str)));
         }
 
-        // ===== 保存为短链（仅存 URL 参数与来源引用，服务端环境变量密钥加密；访问时实时生成） =====
-        async function saveEncryptedContent() {
-            if (!window.lastGen) {
-                showToast('✗ 请先生成订阅链接', 'error');
-                return;
-            }
-            const res = (await askKey(
-                '订阅配置将由服务端加密保存（仅本应用可解密）。请设置访问口令：访问/修改该短链接时需要提供，口令哈希存储于服务器，忘记后将无法找回。',
-                '保存',
-                { withLabel: true, labelValue: editingLabel }
-            )) || {};
-            const { key, label } = res;
-            if (!key) return;
-            try {
-                showToast('⏳ 正在保存订阅配置…', 'success');
-                const resp = await fetch('/api/short', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        ...window.lastGen,
-                        key,
-                        label: label || '',
-                        ...(editingCode ? { code: editingCode, oldKey: editingOldKey } : {}),
-                    }),
-                });
-                const data = await resp.json();
-                if (!resp.ok || !data.success) {
-                    throw new Error(typeof data === 'string' ? data : data.error || '保存失败');
-                }
-                if (data.reused && data.keyMatches === false) {
-                    // 同内容已存在但本次口令与原口令不同：复用短码，但原口令仍有效，不生成带错误口令的链接
-                    const bareUrl = \`\${window.location.origin}/s/\${data.code}\`;
-                    updateResultAndQR(bareUrl);
-                    showToast('✓ 订阅内容相同，已复用既有短码；访问口令仍为原保存口令，本次输入未生效', 'success');
-                    return;
-                }
-                editingCode = data.code;
-                editingLabel = label || '';
-                editingOldKey = key;
-                const shortUrl = \`\${window.location.origin}/s/\${data.code}?key=\${b64EncodeKey(key)}\`;
-                updateResultAndQR(shortUrl);
-                navigator.clipboard.writeText(shortUrl).then(() => {
-                    showToast(data.reused ? '✓ 订阅内容相同，已复用既有短链接（含访问口令）已复制' : '✓ 已加密保存，短链接（含访问口令）已复制', 'success');
-                }).catch(() => {
-                    showToast('✓ 已加密保存，短链接已生成', 'success');
-                });
-            } catch (err) {
-                showToast(\`✗ \${err.message}\`, 'error');
-            }
-        }
-
-        document.getElementById('saveContentBtn')?.addEventListener('click', () => saveEncryptedContent());
-
         // 密钥输入框显示/隐藏切换
         document.getElementById('keyToggle')?.addEventListener('click', () => {
             const input = document.getElementById('keyDialogInput');
@@ -992,16 +938,18 @@ function homePageHtml(e, configJson) {
         setKeyToggle(false);
 
         // ===== 编辑状态（?edit= 载入后保存更新原短链） =====
-        let editingCode = null;
-        let editingLabel = '';
-        // 修改回填时已验证的原密钥，保存更新时作为 oldKey 提交
-        let editingOldKey = '';
-
-        // 解锁条目：口令交服务端 HMAC 校验并解密，明文配置仅回传表单所需字段
+        // 解锁条目：无口令短链直接获取；带口令行弹窗输入后交服务端 HMAC 校验并解密，
+        // 明文配置仅回传表单所需字段
         async function unlockEntry(code, message, btnText) {
+            const fetchGet = async (key) => {
+                const q = key ? \`&key=\${encodeURIComponent(b64EncodeKey(key))}\` : '';
+                return fetch(\`/api/short/get?code=\${code}\${q}\`).then((x) => x.json());
+            };
+            let resp = await fetchGet('');
+            if (resp.success) return { key: '', resp };
             const { key } = (await askKey(message, btnText)) || {};
             if (!key) return null;
-            const resp = await fetch(\`/api/short/get?code=\${code}&key=\${encodeURIComponent(b64EncodeKey(key))}\`).then((x) => x.json());
+            resp = await fetchGet(key);
             if (!resp.success) {
                 throw new Error(typeof resp === 'string' ? resp : resp.error || '获取失败');
             }
@@ -1130,27 +1078,36 @@ function homePageHtml(e, configJson) {
                 }
             }
 
-            // 生成的完整参数（保存短链用）；直接链接 = 全部表单参数 + url（裸订阅）或 src（已入库源名称）
-            window.lastGen = { sources: sources.map((s) => s.id), rawUrls, target: modeId, params: Object.fromEntries(params.entries()) };
-            const displayParams = new URLSearchParams(params);
-            if (!sources.length) {
-                displayParams.set('url', rawUrls.join(','));
-            } else {
-                displayParams.set('src', sources.map((s) => s.name).join(','));
-            }
-            const fullUrl = \`\${origin}/?\${displayParams.toString()}\`;
-            if (sources.length) {
-                showToast('已入库源以名称引用，直链仅本部署可用；跨端共享请用「🔒 保存为短链」', 'success');
-            }
-
-            updateResultAndQR(fullUrl);
-
-            if (fullUrl) {
-                navigator.clipboard.writeText(fullUrl).then(() => {
-                    showToast('✓ 订阅链接已复制到剪贴板', 'success');
-                }).catch(() => {
-                    showToast('✗ 复制失败，请手动复制', 'error');
+            // 生成即入库为短链：仅存 URL 参数与来源引用（服务端密钥加密，无需口令；同内容自动复用短码），
+            // 访问 /s/{code} 时实时生成；保存失败时兜底展示直链
+            try {
+                const resp = await fetch('/api/short', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sources: sources.map((s) => s.id),
+                        rawUrls,
+                        target: modeId,
+                        params: Object.fromEntries(params.entries()),
+                    }),
                 });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    throw new Error(typeof data === 'string' ? data : data.error || '保存失败');
+                }
+                const shortUrl = \`\${origin}/s/\${data.code}\`;
+                updateResultAndQR(shortUrl);
+                navigator.clipboard.writeText(shortUrl).then(() => {
+                    showToast(data.reused ? '✓ 内容相同，已复用既有短链（已复制）' : '✓ 短链已生成并复制', 'success');
+                }).catch(() => {
+                    showToast('✓ 短链已生成', 'success');
+                });
+            } catch (err) {
+                const displayParams = new URLSearchParams(params);
+                if (!sources.length) displayParams.set('url', rawUrls.join(','));
+                else displayParams.set('src', sources.map((s) => s.name).join(','));
+                updateResultAndQR(\`\${origin}/?\${displayParams.toString()}\`);
+                showToast(\`✗ 短链保存失败（\${err.message}），已显示直链\`, 'error');
             }
         }
 
@@ -1629,9 +1586,6 @@ function homePageHtml(e, configJson) {
 
             function setActiveMode(modeId) {
                 currentMode = modeId;
-                editingCode = null;
-                editingLabel = '';
-                editingOldKey = '';
                 document.querySelectorAll('.mode-panel').forEach(panel => {
                     panel.classList.toggle('active', panel.id === \`panel-\${modeId}\`);
                 });
@@ -1643,7 +1597,7 @@ function homePageHtml(e, configJson) {
 
         initApp();
 
-        // ?edit=<短码>：从已保存订阅页跳转来修改配置，口令校验后回填表单
+        // ?edit=<短码>：从已保存订阅页跳转来载入配置，无口令行直接回填，带口令行验证后回填
         (async () => {
             const editCode = new URLSearchParams(location.search).get('edit');
             if (!editCode || !/^[A-Za-z0-9]{4,16}$/.test(editCode)) return;
@@ -1651,10 +1605,7 @@ function homePageHtml(e, configJson) {
                 const unlocked = await unlockEntry(editCode, '请输入访问口令以载入该订阅的配置。', '载入');
                 if (unlocked) {
                     fillFormFromParams(unlocked.resp);
-                    editingCode = editCode;
-                    editingLabel = unlocked.resp.label || '';
-                    editingOldKey = unlocked.key;
-                    showToast('✓ 已载入，保存将更新该短链接', 'success');
+                    showToast('✓ 已载入配置，可直接修改后重新生成', 'success');
                 }
             } catch {
                 showToast('✗ 访问口令错误', 'error');
@@ -1835,10 +1786,21 @@ function savedPageHtml(e, configJson) {
             if (savedPager.page < savedPager.totalPages) loadSavedList(savedPager.page + 1);
         });
 
+        // 解锁条目：无口令短链直接获取（不弹窗）；带口令行弹窗输入后交服务端校验
         async function unlockEntry(code, message, btnText) {
+            const fetchGet = async (key) => {
+                const q = key ? \`&key=\${encodeURIComponent(b64EncodeKey(key))}\` : '';
+                return fetch(\`/api/short/get?code=\${code}\${q}\`).then((x) => x.json());
+            };
+            let resp = await fetchGet('');
+            if (resp.success) {
+                unlockedInfo.set(code, { ...resp, key: '' });
+                unlockedKeys.set(code, '');
+                return { key: '', resp };
+            }
             const { key } = (await askKey(message, btnText)) || {};
             if (!key) return null;
-            const resp = await fetch(\`/api/short/get?code=\${code}&key=\${encodeURIComponent(b64EncodeKey(key))}\`).then((x) => x.json());
+            resp = await fetchGet(key);
             if (!resp.success) {
                 throw new Error(typeof resp === 'string' ? resp : resp.error || '获取失败');
             }
@@ -1851,7 +1813,7 @@ function savedPageHtml(e, configJson) {
             const box = document.getElementById('savedList');
             box.innerHTML = '';
             if (!items.length) {
-                box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">暂无保存的订阅（在转换器生成后点 🔒 保存为短链）</div>';
+                box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">暂无保存的订阅（在转换器生成订阅链接后会自动保存为短链）</div>';
                 return;
             }
             const origin = window.location.origin;
@@ -1872,8 +1834,10 @@ function savedPageHtml(e, configJson) {
                     const srcPart = srcCount ? \`\${srcCount}个订阅源\` : '';
                     const rawPart = rawCount ? \`\${rawCount}条链接\` : '';
                     info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} · \${[srcPart, rawPart].filter(Boolean).join(' + ')} · \${date} · 访问时实时生成</span>\`;
+                } else if (item.protected) {
+                    info.innerHTML = \`<span class="saved-code">🔒 /s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` · \${labelText}\` : ' · 输入口令后显示详情'}</span>\`;
                 } else {
-                    info.innerHTML = \`<span class="saved-code">\${labelText ? '' : '🔒 '}/s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` · \${labelText}\` : ' · 输入口令后显示详情'}</span>\`;
+                    info.innerHTML = \`<span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` · \${labelText}\` : ''} · 访问时实时生成</span>\`;
                 }
                 const actions = document.createElement('div');
                 actions.className = 'saved-actions';
@@ -1882,12 +1846,17 @@ function savedPageHtml(e, configJson) {
                 copyBtn.innerText = '复制';
                 copyBtn.onclick = async () => {
                     try {
-                        const unlocked2 = await unlockEntry(item.code, '该订阅内容已加密，请输入访问口令以生成可用的短链接。', '复制');
-                        if (!unlocked2) return;
-                        renderSavedList(currentSavedItems);
-                        const link = \`\${origin}/s/\${item.code}?key=\${b64EncodeKey(unlocked2.key)}\`;
-                        await navigator.clipboard.writeText(link);
-                        showToast('✓ 短链接已复制', 'success');
+                        if (item.protected) {
+                            const unlocked2 = await unlockEntry(item.code, '该订阅内容已加密，请输入访问口令以生成可用的短链接。', '复制');
+                            if (!unlocked2) return;
+                            renderSavedList(currentSavedItems);
+                            const link = \`\${origin}/s/\${item.code}?key=\${b64EncodeKey(unlocked2.key)}\`;
+                            await navigator.clipboard.writeText(link);
+                            showToast('✓ 短链接已复制', 'success');
+                        } else {
+                            await navigator.clipboard.writeText(\`\${origin}/s/\${item.code}\`);
+                            showToast('✓ 短链接已复制', 'success');
+                        }
                     } catch {
                         showToast('✗ 访问口令错误', 'error');
                     }
@@ -1896,7 +1865,7 @@ function savedPageHtml(e, configJson) {
                 editBtn.className = 'saved-btn';
                 editBtn.innerText = '修改';
                 editBtn.onclick = () => {
-                    // 跳转转换器，口令在那里输入并回填表单
+                    // 跳转转换器，无口令行直接回填，带口令行在那里输入口令
                     location.href = \`/?edit=\${item.code}\`;
                 };
                 const delBtn = document.createElement('button');
@@ -1904,8 +1873,8 @@ function savedPageHtml(e, configJson) {
                 delBtn.innerText = '删除';
                 delBtn.onclick = async () => {
                     try {
-                        let delKey = unlockedKeys.get(item.code);
-                        if (!delKey) {
+                        let delKey = unlockedKeys.get(item.code) || '';
+                        if (item.protected && !delKey) {
                             const r = await unlockEntry(item.code, '请输入访问口令以删除该短链接。', '删除');
                             if (!r) return;
                             delKey = r.key;

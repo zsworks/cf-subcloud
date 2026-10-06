@@ -16,6 +16,6 @@ cf-subcloud（星尘转换器）：Cloudflare Workers 多合一订阅转换服�
 
 ## 架构要点
 
-- 短链（`src/utils/shortlink/`）：仅存 URL 参数与来源引用（`url_md5` 唯一列按内容查重复用短码），访问 `/s/{code}` 时实时重新生成，不缓存生成内容；口令哈希存库，内容知道 ≠ 所有权（同内容不同口令复用短码但原口令仍有效）
+- 短链（`src/utils/shortlink/`）：生成订阅链接时自动入库为短链，仅存 URL 参数与来源引用（`url_md5` 唯一列按内容+是否带口令查重复用短码），访问 `/s/{code}` 时实时重新生成，不缓存生成内容；口令可选——默认无口令（免 key 直接访问，内容仍由服务端密钥 `LINK_ENC_KEY` 加密存储），历史带口令行仍需 `?key=`；同内容不同口令复用短码但原口令仍有效
 - 模板：内置 `template/` 目录经 ASSETS 绑定进程内读取；`TEMPLATE_URL` 可整体替换模板列表，`TPLMH`/`TPLSB` 追加自定义远程模板（支持 `#名称` 自定义显示名）
 - 上游拉取 UA 按客户端类型伪装（`src/utils/shortlink/ua.js` 的 `UA_MAP`），机场后端按 UA 嗅探返回格式

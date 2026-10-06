@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockD1, createEnv } from './helpers.mjs';
-import { saveLink, listLinks, getLink, generateCode, ensureShortLinkTable } from '../../src/utils/shortlink/links.js';
+import { saveLink, listLinks, getLink, deleteLink, generateCode, ensureShortLinkTable } from '../../src/utils/shortlink/links.js';
 import { saveSource } from '../../src/utils/shortlink/sources.js';
 import { getKeys, hmacB64url, decryptBlob } from '../../src/utils/shortlink/crypto.js';
 
@@ -37,12 +37,15 @@ test('saveLink 新建：短码生成、blob/pw_hash 落库', async (t) => {
     assert.equal(obj.content, undefined);
 });
 
-test('saveLink 校验：缺来源/缺口令/缺 target', async () => {
+test('saveLink 校验：缺来源/缺 target；口令可选（无口令 = 无口令短链）', async () => {
     const db = createMockD1();
     const env = createEnv(db);
     await assert.rejects(() => saveLink(db, env, { sources: [], rawUrls: [], target: 'mihomo', params: {}, key: 'p' }), /至少需要一个订阅来源/);
-    await assert.rejects(() => saveLink(db, env, { sources: ['abc'], rawUrls: [], target: 'mihomo', params: {}, key: '' }), /缺少访问口令/);
     await assert.rejects(() => saveLink(db, env, { sources: ['abc'], rawUrls: [], params: {}, key: 'p' }), /缺少 target/);
+    // 无口令保存：pw_hash 为空串哨兵
+    const r = await saveLink(db, env, { sources: [], rawUrls: ['https://x.example/s'], target: 'mihomo', params: {} });
+    const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(r.code).first();
+    assert.equal(row.pw_hash, '');
 });
 
 test('saveLink 更新：oldKey 验证（错误拒绝/正确覆盖）', async (t) => {
@@ -191,4 +194,33 @@ test('saveLink 更新为相同内容：删除旧行并复用既有短码', async
     assert.equal(total, 1);
     const gone = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(ra.code).first();
     assert.equal(gone, null);
+});
+
+test('saveLink 无口令：免 key 访问/删除，查重与带口令行相互独立', async (t) => {
+    global.fetch = stubSubFetch();
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    const db = createMockD1();
+    const env = createEnv(db);
+    const payload = { sources: [], rawUrls: ['https://x.example/s'], target: 'v2ray', params: {} };
+
+    // 无口令保存两次 → 同短码复用
+    const k1 = await saveLink(db, env, { ...payload });
+    const k2 = await saveLink(db, env, { ...payload });
+    assert.equal(k2.reused, true);
+    assert.equal(k2.code, k1.code);
+    // 无口令行与带口令行内容相同也视为不同条目
+    const p1 = await saveLink(db, env, { ...payload, key: 'pw' });
+    assert.notEqual(p1.code, k1.code);
+
+    // 免 key 访问与删除；带口令行不带 key 仍拒绝
+    const g = await getLink(db, env, k1.code, '');
+    assert.equal(g.protected, false);
+    assert.deepEqual(g.rawUrls, payload.rawUrls);
+    await assert.rejects(() => getLink(db, env, p1.code, ''), /访问口令错误/);
+    assert.equal(await deleteLink(db, env, k1.code, ''), true);
+    const gone = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(k1.code).first();
+    assert.equal(gone, null);
+    await assert.rejects(() => deleteLink(db, env, p1.code, ''), /访问口令错误/);
 });
