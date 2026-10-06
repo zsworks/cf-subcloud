@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockD1, createEnv, SAMPLE_B64_SUB } from './helpers.mjs';
-import { saveSource, importSource, listSources, getSource, refreshSource, deleteSource, renameSource } from '../../src/utils/shortlink/sources.js';
+import { saveSource, listSources, getSource, refreshSource, deleteSource, renameSource } from '../../src/utils/shortlink/sources.js';
 import { getKeys, hmacB64url } from '../../src/utils/shortlink/crypto.js';
 
 const URL_A = 'https://airport-a.example/sub?token=aaa';
@@ -160,30 +160,7 @@ test('renameSource 改名不影响内容；空名报错；源不存在返回 nul
     assert.equal(await renameSource(db, env, 'nonexistent', 'X'), null);
 });
 
-test('importSource 不经网络直接入库，刷新时按 target UA 服务端拉取', async (t) => {    const realFetch = global.fetch;
-    t.after(() => {
-        global.fetch = realFetch;
-    });
-    global.fetch = stubFetch({ 'airport-a.example': SAMPLE_B64_SUB });
-
-    const db = createMockD1();
-    const env = createEnv(db);
-    // 导入：内容已在本机拉好
-    const { id } = await importSource(db, env, URL_A, '本机导入', 'clash-verge/2.0', 'manual-content', { 'content-type': 'text/yaml' });
-    const src = await getSource(db, env, id);
-    assert.equal(src.content, 'manual-content');
-    assert.equal(src.ua, 'clash-verge/2.0');
-
-    // 刷新：服务端按入库 UA 自己拉
-    const r = await refreshSource(db, env, id);
-    assert.ok(r.fetchedAt > 0);
-    assert.equal((await getSource(db, env, id)).content, SAMPLE_B64_SUB);
-
-    // 缺内容报错
-    await assert.rejects(() => importSource(db, env, URL_B, 'B', '', ''), /缺少订阅内容/);
-});
-
-test('订阅代码：save/import 带 code 入库，listSources/getSource 返回 code', async (t) => {
+test('订阅代码：save 带 code 入库，listSources/getSource 返回 code', async (t) => {
     const realFetch = global.fetch;
     t.after(() => {
         global.fetch = realFetch;
@@ -196,10 +173,6 @@ test('订阅代码：save/import 带 code 入库，listSources/getSource 返回 
     assert.equal(saved.code, 'YT');
     assert.equal((await listSources(db))[0].code, 'YT');
     assert.equal((await getSource(db, env, saved.id)).code, 'YT');
-
-    // importSource 同样支持
-    const imp = await importSource(db, env, URL_B, 'B', 'v2ray', 'manual', {}, 'AB');
-    assert.equal(imp.code, 'AB');
 });
 
 test('订阅代码全表唯一：跨订阅重复报错，同 URL 覆盖自身不受阻', async (t) => {

@@ -76,17 +76,6 @@ export async function saveSource(db, env, url, name, ua, code) {
     return upsertSource(db, env, srcUrl.href, name, safeUa, content, headers, safeCode);
 }
 
-// 本机导入：内容已由调用方在自己网络拉好，服务端只负责加密入库
-// （部分机场 WAF 封禁全部数据中心出口，云端无法代拉，只能由用户本机拉取后推送）
-export async function importSource(db, env, url, name, ua, content, headers = {}, code) {
-    await ensureSourceTable(db);
-    const srcUrl = new URL(url);
-    if (!content || typeof content !== 'string') throw new Error('缺少订阅内容');
-    const safeUa = typeof ua === 'string' && ua ? ua.slice(0, 64) : DEFAULT_SOURCE_UA;
-    const safeCode = normalizeSourceCode(code);
-    return upsertSource(db, env, srcUrl.href, name, safeUa, content, headers, safeCode);
-}
-
 async function upsertSource(db, env, url, name, ua, content, headers, code = null) {
     await ensureSourceTable(db);
     const { encKey, hmacKey } = await getKeys(env);

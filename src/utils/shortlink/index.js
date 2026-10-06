@@ -1,4 +1,4 @@
-import { saveSource, importSource, listSources, refreshSource, deleteSource, renameSource } from './sources.js';
+import { saveSource, listSources, refreshSource, deleteSource, renameSource } from './sources.js';
 import { saveLink, listLinks, getLink, deleteLink, serveLink } from './links.js';
 import { base64ToBytes } from './crypto.js';
 import { resolveSourceUa } from './ua.js';
@@ -34,21 +34,6 @@ export async function handleShortLink(request, env) {
         const r = await saveSource(db, env, String(sourceUrl), cleanName, resolveSourceUa(typeof target === 'string' ? target : ''), code);
         return jsonResponse({ success: true, ...r });
     }
-    // 本机导入：内容由调用方在自己网络拉取后推送（适配封禁数据中心出口的机场）
-    if (path === '/api/source/import' && request.method === 'POST') {
-        if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
-        const adminToken = env?.ADMIN_TOKEN;
-        if (!adminToken || request.headers.get('x-admin-token') !== adminToken) {
-            return notFound('未授权');
-        }
-        const { url: sourceUrl, name, target, content, headers, code } = await request.json();
-        if (!sourceUrl || !/^https?:\/\//.test(String(sourceUrl))) throw new Error('无效的订阅地址');
-        const cleanName = typeof name === 'string' && name.trim() ? name.trim().slice(0, 30) : '';
-        if (!cleanName) throw new Error('请输入订阅名称');
-        const r = await importSource(db, env, String(sourceUrl), cleanName, resolveSourceUa(typeof target === 'string' ? target : ''), String(content || ''), typeof headers === 'object' && headers ? headers : {}, code);
-        return jsonResponse({ success: true, ...r });
-    }
-
     if (path === '/api/source/list' && request.method === 'GET') {
         if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
         return jsonResponse({ success: true, items: await listSources(db) });
