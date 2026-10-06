@@ -10,10 +10,9 @@ cf-subcloud（星尘转换器）：Cloudflare Workers 多合一订阅转换服�
 - 部署：`source ~/.token/token_env.sh && npx wrangler deploy`（凭据机制见全局 `~/.zcode/AGENTS.md`）
 - 开发调试：`pnpm dev`（`dist/min.js` 为 dev 构建，无 vendor 处理插件，若报 `document is not defined` 用 `node src/server.js` 代替）
 
-## 出站 UA 约定
+## 安全约定
 
-- 本服务的**所有出站请求**（拉取订阅源、规则模板、远程模板列表）的 User-Agent 必须附加 ` [REDACTED]` 后缀——约定详情见全局知识库 `~/.claude/knowledge/zworks.md`（对全部 zworks 服务适用）
-- 实现点：`src/utils/fetchResponse.js` 的 `UA_SUFFIX` 常量（订阅/模板拉取唯一出口，含中转 `ua` 透传）；`src/core/page/page.js` 的 `templates.json` 拉取。新增出站请求沿用同一约定，不要直连 `fetch` 裸 UA
+- 出站请求的 UA 标识由 Cloudflare WAF 过滤规则在边缘层处理，**不在代码中实现**；此类标识等同密钥，任何服务标识、令牌、过滤标记不得写入代码、注释或文档（本仓库为公开仓库）
 
 ## 架构要点
 

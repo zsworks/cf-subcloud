@@ -3,14 +3,6 @@ import { buildApiUrl } from './ApiUrl.js';
 import { getRelayConfig } from './relayFetch.js';
 import { ASSET_MARKER, getAssetFetcher } from './assetsFetch.js';
 
-// 出站请求统一附加的服务标识后缀（约定见项目根 AGENTS.md），便于上游识别请求来自本服务
-export const UA_SUFFIX = '[REDACTED]';
-
-const withUaSuffix = (ua) => {
-    const s = String(ua);
-    return s.endsWith(UA_SUFFIX) ? s : `${s} ${UA_SUFFIX}`;
-};
-
 /**
  * 请求 URL 并解析响应数据。
  *
@@ -59,7 +51,6 @@ async function fetchResponse(url, userAgent) {
     if (!userAgent) {
         userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3';
     }
-    userAgent = withUaSuffix(userAgent);
     let response = null;
     if (String(url).startsWith(ASSET_MARKER)) {
         const fetchAsset = getAssetFetcher();
