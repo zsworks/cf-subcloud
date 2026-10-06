@@ -12,11 +12,8 @@ cf-subcloud（星尘转换器）：Cloudflare Workers 多合一订阅转换服�
 
 ## 出站 UA 约定
 
-- 本服务的**所有出站请求**（拉取订阅源、规则模板、远程模板列表）的 User-Agent 必须附加 ` [REDACTED]` 后缀，例如 `clash-verge/2.0 [REDACTED]`，便于上游识别请求来自本服务
-- 实现点：
-  - `src/utils/fetchResponse.js` —— 订阅/模板拉取的唯一出口，`UA_SUFFIX` 常量定义于此，经 `withUaSuffix` 统一追加（含中转链路的 `ua` 参数透传）；改后缀值只改这一处
-  - `src/core/page/page.js` —— `templates.json` 远程模板列表拉取单独带 `UA_SUFFIX`
-- 新增出站请求时沿用同一约定，不要直连 `fetch` 裸 UA
+- 本服务的**所有出站请求**（拉取订阅源、规则模板、远程模板列表）的 User-Agent 必须附加 ` [REDACTED]` 后缀——约定详情见全局知识库 `~/.claude/knowledge/zworks.md`（对全部 zworks 服务适用）
+- 实现点：`src/utils/fetchResponse.js` 的 `UA_SUFFIX` 常量（订阅/模板拉取唯一出口，含中转 `ua` 透传）；`src/core/page/page.js` 的 `templates.json` 拉取。新增出站请求沿用同一约定，不要直连 `fetch` 裸 UA
 
 ## 架构要点
 
