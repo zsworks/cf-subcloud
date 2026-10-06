@@ -793,7 +793,7 @@ function homePageHtml(e, configJson) {
             <div class="result-header">
                 <span>📋 订阅地址 (点击输入框复制)</span>
                 <span style="display: flex; gap: 10px;">
-                    <span class="copy-hint" id="saveContentBtn">🔒 保存订阅内容</span>
+                    <span class="copy-hint" id="saveContentBtn">🔒 保存为短链</span>
                     <span class="copy-hint" id="copyToastBtn">📎 一键复制</span>
                 </span>
             </div>
@@ -928,7 +928,7 @@ function homePageHtml(e, configJson) {
             return btoa(String.fromCharCode(...new TextEncoder().encode(str)));
         }
 
-        // ===== 保存订阅内容（服务端环境变量密钥加密） =====
+        // ===== 保存为短链（仅存 URL 参数与来源引用，服务端环境变量密钥加密；访问时实时生成） =====
         async function saveEncryptedContent() {
             if (!window.lastGen) {
                 showToast('✗ 请先生成订阅链接', 'error');
@@ -1140,7 +1140,7 @@ function homePageHtml(e, configJson) {
             }
             const fullUrl = \`\${origin}/?\${displayParams.toString()}\`;
             if (sources.length) {
-                showToast('已入库源以名称引用，直链仅本部署可用；跨端共享请用「🔒 保存订阅内容」短链接', 'success');
+                showToast('已入库源以名称引用，直链仅本部署可用；跨端共享请用「🔒 保存为短链」', 'success');
             }
 
             updateResultAndQR(fullUrl);
@@ -1851,7 +1851,7 @@ function savedPageHtml(e, configJson) {
             const box = document.getElementById('savedList');
             box.innerHTML = '';
             if (!items.length) {
-                box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">暂无保存的订阅（在转换器生成后点 🔒 保存订阅内容）</div>';
+                box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">暂无保存的订阅（在转换器生成后点 🔒 保存为短链）</div>';
                 return;
             }
             const origin = window.location.origin;
@@ -1871,7 +1871,7 @@ function savedPageHtml(e, configJson) {
                     const rawCount = (unlocked.rawUrls || []).length;
                     const srcPart = srcCount ? \`\${srcCount}个订阅源\` : '';
                     const rawPart = rawCount ? \`\${rawCount}条链接\` : '';
-                    info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} · \${[srcPart, rawPart].filter(Boolean).join(' + ')} · \${date} · \${unlocked.hasContent ? '📦 已缓存' : '⏳ 待生成'}</span>\`;
+                    info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} · \${[srcPart, rawPart].filter(Boolean).join(' + ')} · \${date} · 访问时实时生成</span>\`;
                 } else {
                     info.innerHTML = \`<span class="saved-code">\${labelText ? '' : '🔒 '}/s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` · \${labelText}\` : ' · 输入口令后显示详情'}</span>\`;
                 }

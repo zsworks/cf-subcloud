@@ -156,21 +156,7 @@ export async function getLink(db, env, code, key) {
             return { id, name: s?.name ?? null };
         }),
     );
-    return { target: obj.target, params: obj.params || {}, sources, rawUrls: obj.rawUrls || [], label: obj.label ?? null, hasContent: Boolean(obj.content) };
-}
-
-export async function clearLink(db, env, code, key) {
-    await ensureShortLinkTable(db);
-    const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(code).first();
-    if (!row) return { notFound: true };
-    const { encKey, hmacKey } = await getKeys(env);
-    if (!(await verifyPw(row.pw_hash, key, hmacKey))) throw new Error('访问口令错误');
-    const obj = await decryptBlob(row.blob, encKey);
-    delete obj.content;
-    delete obj.textHeaders;
-    delete obj.srcFetched;
-    await db.prepare('UPDATE short_links SET blob = ? WHERE code = ?').bind(await encryptBlob(obj, encKey), code).run();
-    return true;
+    return { target: obj.target, params: obj.params || {}, sources, rawUrls: obj.rawUrls || [], label: obj.label ?? null };
 }
 
 export async function deleteLink(db, env, code, key) {
@@ -183,17 +169,6 @@ export async function deleteLink(db, env, code, key) {
     return true;
 }
 
-// 生成缓存是否仍新鲜：srcFetched 快照与各源当前 fetched_at 一致；
-// 源已删除（不在 fetchedMap）视为新鲜——已有缓存仍可服务
-export function isCacheFresh(obj, fetchedMap) {
-    if (!obj.content || !obj.srcFetched) return false;
-    return (obj.sources || []).every((id) => {
-        const current = fetchedMap[id];
-        if (current === undefined) return true;
-        return obj.srcFetched[id] === current;
-    });
-}
-
 function jsonError(message, status) {
     return new Response(JSON.stringify({ success: false, error: message }), {
         status,
@@ -201,8 +176,9 @@ function jsonError(message, status) {
     });
 }
 
-// 访问短链接：GET /s/{code}?key=口令base64；缓存新鲜直接返回，否则注入源缓存内容重新生成
-export async function serveLink(request, env, code, keyB64) {
+// 访问短链接：GET /s/{code}?key=口令base64；短链仅存 URL 参数，每次访问实时重新生成。
+// generator 仅供测试注入以绕开 Sub-Store 重依赖，生产用默认 handleRequest
+export async function serveLink(request, env, code, keyB64, generator = handleRequest) {
     const db = env?.SHORT_LINK;
     await ensureShortLinkTable(db);
     const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(code).first();
@@ -215,36 +191,22 @@ export async function serveLink(request, env, code, keyB64) {
     if (!(await verifyPw(row.pw_hash, pw, hmacKey))) return jsonError('访问口令错误', 400);
     const obj = await decryptBlob(row.blob, encKey);
 
-    // 收集源缓存内容与当前 fetched_at；源已删除则跳过（不在 fetchedMap 中，
-    // isCacheFresh 视为新鲜——已有缓存仍可服务，需重生成时再报错）
+    // 收集源缓存内容；源已删除则无法重新生成
     const items = [];
     const srcHeaders = [];
-    const fetchedMap = {};
     for (const id of obj.sources || []) {
         let s = await getSource(db, env, id);
-        if (!s) continue;
+        if (!s) return jsonError('原始订阅已删除，无法重新生成', 400);
         if (!s.content) {
             await refreshSource(db, env, id);
             s = await getSource(db, env, id);
         }
         items.push(s.content);
         srcHeaders.push(s.headers);
-        fetchedMap[id] = s.fetchedAt;
     }
     items.push(...(obj.rawUrls || []));
 
-    if (obj.content && isCacheFresh(obj, fetchedMap)) {
-        const headers = new Headers(obj.textHeaders || {});
-        if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json; charset=utf-8');
-        return new Response(obj.content, { status: 200, headers });
-    }
-
-    // 需要重新生成：此时源被删除则无法继续
-    if ((obj.sources || []).some((id) => !(id in fetchedMap))) {
-        return jsonError('原始订阅已删除，无法重新生成', 400);
-    }
-
-    // 重新生成：内部请求携带除 url 外的全部参数，覆写 e.urls 注入缓存内容（绕过 URL 逗号拆分）
+    // 生成请求携带除 url 外的全部参数，覆写 e.urls 注入源缓存内容（绕过 URL 逗号拆分）
     const origin = new URL(request.url).origin;
     const qs = new URLSearchParams({ ...(obj.params || {}), target: obj.target });
     const genRequest = new Request(new URL(`/?${qs}`, origin), {
@@ -253,7 +215,7 @@ export async function serveLink(request, env, code, keyB64) {
     });
     const e = buildConfig(genRequest, env, false);
     e.urls = items;
-    const result = await handleRequest(e);
+    const result = await generator(e);
     if ((result.status || 200) !== 200) {
         return new Response(result.body, { status: result.status, headers: result.headers });
     }
@@ -262,12 +224,5 @@ export async function serveLink(request, env, code, keyB64) {
     // 流量信息头优先取源缓存
     const userinfo = srcHeaders.map((h) => h && h['subscription-userinfo']).find(Boolean);
     if (userinfo) textHeaders['subscription-userinfo'] = userinfo;
-
-    try {
-        const blob = await encryptBlob({ ...obj, content, textHeaders, srcFetched: fetchedMap }, encKey);
-        await db.prepare('UPDATE short_links SET blob = ? WHERE code = ?').bind(blob, code).run();
-    } catch {
-        // 回写失败不影响本次返回
-    }
     return new Response(content, { status: 200, headers: new Headers(textHeaders) });
 }

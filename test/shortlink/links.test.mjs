@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockD1, createEnv } from './helpers.mjs';
-import { saveLink, listLinks, getLink, clearLink, isCacheFresh, generateCode, ensureShortLinkTable } from '../../src/utils/shortlink/links.js';
+import { saveLink, listLinks, getLink, generateCode, ensureShortLinkTable } from '../../src/utils/shortlink/links.js';
 import { saveSource } from '../../src/utils/shortlink/sources.js';
-import { getKeys, hmacB64url, encryptBlob, decryptBlob } from '../../src/utils/shortlink/crypto.js';
+import { getKeys, hmacB64url, decryptBlob } from '../../src/utils/shortlink/crypto.js';
 
 const realFetch = global.fetch;
 const stubSubFetch = () => async () => new Response('x', { status: 200 });
@@ -79,7 +79,6 @@ test('getLink：口令错误/正确、源名称解析、已删除源 name 为 nu
     assert.equal(g.sources.length, 2);
     assert.deepEqual(g.sources[0], { id: src.id, name: 'A' });
     assert.equal(g.sources[1].name, null);
-    assert.equal(g.hasContent, false);
 });
 
 test('listLinks：解密返回 label', async (t) => {
@@ -96,38 +95,6 @@ test('listLinks：解密返回 label', async (t) => {
     assert.equal(res.items.length, 2);
     assert.ok(res.items.some((i) => i.label === '第一个'));
     assert.ok(res.items.some((i) => i.label === null));
-});
-
-test('clearLink：清除生成缓存字段', async (t) => {
-    global.fetch = stubSubFetch();
-    t.after(() => {
-        global.fetch = realFetch;
-    });
-    const db = createMockD1();
-    const env = createEnv(db);
-    const r = await saveLink(db, env, { sources: [], rawUrls: ['https://x.example/s'], target: 'v2ray', params: {}, key: 'p' });
-    // 手动写入生成缓存
-    const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(r.code).first();
-    const { encKey } = await getKeys(env);
-    const obj = await decryptBlob(row.blob, encKey);
-    const withCache = { ...obj, content: 'CACHED', textHeaders: { 'Content-Type': 'text/plain' }, srcFetched: {} };
-    await db.prepare('UPDATE short_links SET blob = ? WHERE code = ?').bind(await encryptBlob(withCache, encKey), r.code).run();
-    assert.equal((await getLink(db, env, r.code, 'p')).hasContent, true);
-
-    await assert.rejects(() => clearLink(db, env, r.code, 'bad'), /访问口令错误/);
-    assert.equal(await clearLink(db, env, r.code, 'p'), true);
-    assert.equal((await getLink(db, env, r.code, 'p')).hasContent, false);
-});
-
-test('isCacheFresh 纯函数语义', () => {
-    const obj = { content: 'c', sources: ['s1', 's2'], srcFetched: { s1: 100, s2: 200 } };
-    assert.equal(isCacheFresh(obj, { s1: 100, s2: 200 }), true);
-    assert.equal(isCacheFresh(obj, { s1: 101, s2: 200 }), false);
-    // 源已删除（不在 fetchedMap）：已有缓存仍可服务
-    assert.equal(isCacheFresh(obj, { s1: 100 }), true);
-    // 无缓存/无快照
-    assert.equal(isCacheFresh({ sources: [], srcFetched: {} }, { s1: 100 }), false);
-    assert.equal(isCacheFresh({ content: 'c', sources: [], srcFetched: {} }, {}), true);
 });
 
 test('generateCode 形态', () => {

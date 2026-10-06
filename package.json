@@ -12,7 +12,7 @@
 		"dev:esbuild": "nodemon -w src -w package.json --exec node dev-esbuild.js",
 		"dev:run": "wait-on dist/min.js && nodemon -w dist/min.js --exec node dist/min.js",
 		"lint": "prettier --write .",
-		"test": "node --test test/shortlink/*.test.mjs"
+		"test": "node --require ./test/helpers/dom-stub.cjs --import ./test/helpers/alias-loader.mjs --test test/shortlink/*.test.mjs"
 	},
 	"devDependencies": {
 		"concurrently": "^10.0.3",

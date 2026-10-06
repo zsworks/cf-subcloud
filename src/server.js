@@ -2536,7 +2536,7 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=wT.generate
             <div class="result-header">
                 <span>\u{1F4CB} \u8BA2\u9605\u5730\u5740 (\u70B9\u51FB\u8F93\u5165\u6846\u590D\u5236)</span>
                 <span style="display: flex; gap: 10px;">
-                    <span class="copy-hint" id="saveContentBtn">\u{1F512} \u4FDD\u5B58\u8BA2\u9605\u5185\u5BB9</span>
+                    <span class="copy-hint" id="saveContentBtn">\u{1F512} \u4FDD\u5B58\u4E3A\u77ED\u94FE</span>
                     <span class="copy-hint" id="copyToastBtn">\u{1F4CE} \u4E00\u952E\u590D\u5236</span>
                 </span>
             </div>
@@ -2671,7 +2671,7 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=wT.generate
             return btoa(String.fromCharCode(...new TextEncoder().encode(str)));
         }
 
-        // ===== \u4FDD\u5B58\u8BA2\u9605\u5185\u5BB9\uFF08\u670D\u52A1\u7AEF\u73AF\u5883\u53D8\u91CF\u5BC6\u94A5\u52A0\u5BC6\uFF09 =====
+        // ===== \u4FDD\u5B58\u4E3A\u77ED\u94FE\uFF08\u4EC5\u5B58 URL \u53C2\u6570\u4E0E\u6765\u6E90\u5F15\u7528\uFF0C\u670D\u52A1\u7AEF\u73AF\u5883\u53D8\u91CF\u5BC6\u94A5\u52A0\u5BC6\uFF1B\u8BBF\u95EE\u65F6\u5B9E\u65F6\u751F\u6210\uFF09 =====
         async function saveEncryptedContent() {
             if (!window.lastGen) {
                 showToast('\u2717 \u8BF7\u5148\u751F\u6210\u8BA2\u9605\u94FE\u63A5', 'error');
@@ -2883,7 +2883,7 @@ Reason: ${s}`)}return!e["tls-fingerprint"]&&o&&(e["tls-fingerprint"]=wT.generate
             }
             const fullUrl = \`\${origin}/?\${displayParams.toString()}\`;
             if (sources.length) {
-                showToast('\u5DF2\u5165\u5E93\u6E90\u4EE5\u540D\u79F0\u5F15\u7528\uFF0C\u76F4\u94FE\u4EC5\u672C\u90E8\u7F72\u53EF\u7528\uFF1B\u8DE8\u7AEF\u5171\u4EAB\u8BF7\u7528\u300C\u{1F512} \u4FDD\u5B58\u8BA2\u9605\u5185\u5BB9\u300D\u77ED\u94FE\u63A5', 'success');
+                showToast('\u5DF2\u5165\u5E93\u6E90\u4EE5\u540D\u79F0\u5F15\u7528\uFF0C\u76F4\u94FE\u4EC5\u672C\u90E8\u7F72\u53EF\u7528\uFF1B\u8DE8\u7AEF\u5171\u4EAB\u8BF7\u7528\u300C\u{1F512} \u4FDD\u5B58\u4E3A\u77ED\u94FE\u300D', 'success');
             }
 
             updateResultAndQR(fullUrl);
@@ -3581,7 +3581,7 @@ ${s}
             const box = document.getElementById('savedList');
             box.innerHTML = '';
             if (!items.length) {
-                box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">\u6682\u65E0\u4FDD\u5B58\u7684\u8BA2\u9605\uFF08\u5728\u8F6C\u6362\u5668\u751F\u6210\u540E\u70B9 \u{1F512} \u4FDD\u5B58\u8BA2\u9605\u5185\u5BB9\uFF09</div>';
+                box.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">\u6682\u65E0\u4FDD\u5B58\u7684\u8BA2\u9605\uFF08\u5728\u8F6C\u6362\u5668\u751F\u6210\u540E\u70B9 \u{1F512} \u4FDD\u5B58\u4E3A\u77ED\u94FE\uFF09</div>';
                 return;
             }
             const origin = window.location.origin;
@@ -3601,7 +3601,7 @@ ${s}
                     const rawCount = (unlocked.rawUrls || []).length;
                     const srcPart = srcCount ? \`\${srcCount}\u4E2A\u8BA2\u9605\u6E90\` : '';
                     const rawPart = rawCount ? \`\${rawCount}\u6761\u94FE\u63A5\` : '';
-                    info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} \xB7 \${[srcPart, rawPart].filter(Boolean).join(' + ')} \xB7 \${date} \xB7 \${unlocked.hasContent ? '\u{1F4E6} \u5DF2\u7F13\u5B58' : '\u23F3 \u5F85\u751F\u6210'}</span>\`;
+                    info.innerHTML = \`<span class="saved-mode">\${labelText || modeName}</span><span class="saved-code">/s/\${item.code}</span><span class="saved-meta">\${modeName} \xB7 \${[srcPart, rawPart].filter(Boolean).join(' + ')} \xB7 \${date} \xB7 \u8BBF\u95EE\u65F6\u5B9E\u65F6\u751F\u6210</span>\`;
                 } else {
                     info.innerHTML = \`<span class="saved-code">\${labelText ? '' : '\u{1F512} '}/s/\${item.code}</span><span class="saved-meta">\${date}\${labelText ? \` \xB7 \${labelText}\` : ' \xB7 \u8F93\u5165\u53E3\u4EE4\u540E\u663E\u793A\u8BE6\u60C5'}</span>\`;
                 }

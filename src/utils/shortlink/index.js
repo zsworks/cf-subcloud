@@ -1,5 +1,5 @@
 import { saveSource, importSource, listSources, refreshSource, deleteSource, renameSource } from './sources.js';
-import { saveLink, listLinks, getLink, clearLink, deleteLink, serveLink } from './links.js';
+import { saveLink, listLinks, getLink, deleteLink, serveLink } from './links.js';
 import { base64ToBytes } from './crypto.js';
 import { resolveSourceUa } from './ua.js';
 
@@ -102,15 +102,6 @@ export async function handleShortLink(request, env) {
         const r = await getLink(db, env, code, pw);
         if (r.notFound) return notFound('短链接不存在');
         return jsonResponse({ success: true, code, ...r });
-    }
-    if (path === '/api/short/clear' && request.method === 'POST') {
-        if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
-        const { code, key } = await request.json();
-        if (!code || !/^[A-Za-z0-9]{4,16}$/.test(String(code))) throw new Error('无效的短码');
-        if (!key) throw new Error('缺少访问口令');
-        const r = await clearLink(db, env, String(code), String(key));
-        if (r.notFound) return notFound('短链接不存在');
-        return jsonResponse({ success: true });
     }
     if (path === '/api/short/delete' && request.method === 'POST') {
         if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
