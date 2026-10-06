@@ -7,7 +7,7 @@ cf-subcloud（星尘转换器）：Cloudflare Workers 多合一订阅转换服�
 - 构建：`node esbuild.js` —— 产物 `dist/_worker.js`（Worker 入口，部署用）与 `src/server.js`（Node/Vercel 产物，构建产物随源码入库，源码改动后必须重建）
 - 测试：`pnpm test` —— 全套应为绿色；裸 Node 跑 Sub-Store 源码依赖 `test/helpers/`（DOM stub + `@/` 别名/目录导入/JSON 导入 loader），勿删
 - 本地起服务：`PORT=3000 node src/server.js`（注意 PORT 环境变量实际不生效，固定 3000）
-- 部署：`source ~/.token/token_env.sh && npx wrangler deploy`（凭据机制见全局 `~/.zcode/AGENTS.md`）
+- 部署：`source ~/.token/token_env.sh && npx wrangler deploy`（凭据机制见全局 `~/.zcode/AGENTS.md`）；**改动完成并验证后直接部署，无需询问（用户长期授权，2026-10-06）**
 - 开发调试：`pnpm dev`（`dist/min.js` 为 dev 构建，无 vendor 处理插件，若报 `document is not defined` 用 `node src/server.js` 代替）
 
 ## 安全约定
