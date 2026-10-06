@@ -45,7 +45,8 @@ test('配置中转后经 relay 拉取并携带令牌', async (t) => {
     const u = new URL(calls[0].url);
     assert.equal(u.origin + u.pathname, RELAY);
     assert.equal(u.searchParams.get('url'), 'https://up.example/sub');
-    assert.equal(u.searchParams.get('ua'), 'clash-verge/2.0');
+    // 出站 UA 统一附加服务标识后缀（约定见 AGENTS.md）
+    assert.equal(u.searchParams.get('ua'), 'clash-verge/2.0 [REDACTED]');
     assert.equal(calls[0].init.headers['x-relay-token'], 'tok-1');
     assert.equal(r.status, 200);
     assert.equal(r.data, 'clash-yaml');

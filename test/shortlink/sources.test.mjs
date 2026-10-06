@@ -122,13 +122,14 @@ test('saveSource 按客户端类型使用对应 UA；refresh 沿用入库 UA；�
     const r1 = await saveSource(db, env, URL_A, '机场A');
     // mihomo：clash UA
     const r2 = await saveSource(db, env, URL_B, '机场B', 'clash-verge/2.0');
-    assert.deepEqual(seenUas, ['v2ray', 'clash-verge/2.0']);
+    // 出站 UA 统一附加服务标识后缀（约定见 AGENTS.md），入库值保持原始 UA
+    assert.deepEqual(seenUas, ['v2ray [REDACTED]', 'clash-verge/2.0 [REDACTED]']);
     assert.equal((await getSource(db, env, r1.id)).ua, 'v2ray');
     assert.equal((await getSource(db, env, r2.id)).ua, 'clash-verge/2.0');
 
-    // 刷新沿用各自入库的 UA
+    // 刷新沿用各自入库的 UA（出站时同样带后缀）
     await refreshSource(db, env, r2.id);
-    assert.equal(seenUas[2], 'clash-verge/2.0');
+    assert.equal(seenUas[2], 'clash-verge/2.0 [REDACTED]');
 });
 
 test('旧表（无 ua 列）自动补列迁移', async () => {

@@ -1,4 +1,5 @@
 import configs from './config.js';
+import { UA_SUFFIX } from '../../utils/index.js';
 // 三个前端库自托管内联（原 jsdelivr CDN 在部分网络被阻断会导致整页脚本不执行）
 // 版本：qrcodejs-kx@1.0.2 / marked@12.0.2 / dompurify@3.0.5，更新见 vendor/README.md
 import qrcodeLib from './vendor/qrcode.min.js';
@@ -728,7 +729,7 @@ export async function getFakePage(e) {
     let configData = JSON.parse(configs(e.tplmh, e.tplsb));
     if (e.templateBaseUrl) {
         try {
-            const res = await fetch(`${e.templateBaseUrl}/templates.json`);
+            const res = await fetch(`${e.templateBaseUrl}/templates.json`, { headers: { 'User-Agent': UA_SUFFIX } });
             if (res.ok) {
                 const externalTemplates = await res.json();
                 for (const [target, templates] of Object.entries(externalTemplates)) {
