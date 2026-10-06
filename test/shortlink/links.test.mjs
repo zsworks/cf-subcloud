@@ -140,3 +140,88 @@ test('旧表结构自动重建：legacy 表被清空', async () => {
     const probe = await db.prepare('SELECT pw_hash FROM short_links LIMIT 1').first();
     assert.equal(probe, null); // 旧数据已被 DROP，新表为空
 });
+
+test('旧表缺 url_md5 列：自动补列，保存后写入 MD5', async (t) => {
+    global.fetch = stubSubFetch();
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    const db = createMockD1({ noMd5: true });
+    const env = createEnv(db);
+    const r = await saveLink(db, env, { sources: [], rawUrls: ['https://x.example/s'], target: 'mihomo', params: {}, key: 'p' });
+    const row = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(r.code).first();
+    assert.match(row.url_md5, /^[0-9a-f]{32}$/);
+});
+
+test('saveLink 查重复用：同内容同口令 → 同短码且不新增行', async (t) => {
+    global.fetch = stubSubFetch();
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    const db = createMockD1();
+    const env = createEnv(db);
+    const payload = { sources: [], rawUrls: ['https://x.example/s'], target: 'mihomo', params: { udp: 'true', template: 'default.yaml' } };
+    const r1 = await saveLink(db, env, { ...payload, key: 'pw1' });
+    // 键序不同但内容相同的 params 也应命中同一行
+    const r2 = await saveLink(db, env, { ...payload, params: { template: 'default.yaml', udp: 'true' }, key: 'pw1' });
+    assert.equal(r2.reused, true);
+    assert.equal(r2.keyMatches, true);
+    assert.equal(r2.code, r1.code);
+    const { total } = await db.prepare('SELECT COUNT(*) AS total FROM short_links').first();
+    assert.equal(total, 1);
+});
+
+test('saveLink 查重：同链接不同参数/目标 → 不同短码', async (t) => {
+    global.fetch = stubSubFetch();
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    const db = createMockD1();
+    const env = createEnv(db);
+    const base = { sources: [], rawUrls: ['https://x.example/s'], target: 'mihomo', params: {} };
+    await saveLink(db, env, { ...base, key: 'p' });
+    const r2 = await saveLink(db, env, { ...base, params: { udp: 'true' }, key: 'p' });
+    const r3 = await saveLink(db, env, { ...base, target: 'singbox', key: 'p' });
+    assert.notEqual(r2.code, r3.code);
+    assert.equal(r2.reused, undefined);
+    const { total } = await db.prepare('SELECT COUNT(*) AS total FROM short_links').first();
+    assert.equal(total, 3);
+});
+
+test('saveLink 查重：同内容不同口令 → 复用短码且原口令仍有效', async (t) => {
+    global.fetch = stubSubFetch();
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    const db = createMockD1();
+    const env = createEnv(db);
+    const r1 = await saveLink(db, env, { sources: [], rawUrls: ['https://x.example/s'], target: 'v2ray', params: {}, key: 'original' });
+    const r2 = await saveLink(db, env, { sources: [], rawUrls: ['https://x.example/s'], target: 'v2ray', params: {}, key: 'other' });
+    assert.equal(r2.reused, true);
+    assert.equal(r2.keyMatches, false);
+    assert.equal(r2.code, r1.code);
+    // 新口令不能读取，原口令可以
+    await assert.rejects(() => getLink(db, env, r1.code, 'other'), /访问口令错误/);
+    await getLink(db, env, r1.code, 'original');
+});
+
+test('saveLink 更新为相同内容：删除旧行并复用既有短码', async (t) => {
+    global.fetch = stubSubFetch();
+    t.after(() => {
+        global.fetch = realFetch;
+    });
+    const db = createMockD1();
+    const env = createEnv(db);
+    const payloadA = { sources: [], rawUrls: ['https://a.example/s'], target: 'mihomo', params: {} };
+    const payloadB = { sources: [], rawUrls: ['https://b.example/s'], target: 'mihomo', params: {} };
+    const ra = await saveLink(db, env, { ...payloadA, key: 'pa' });
+    const rb = await saveLink(db, env, { ...payloadB, key: 'pb' });
+    // 把 ra 更新成与 rb 相同的内容：ra 行删除，返回 rb 短码
+    const r = await saveLink(db, env, { ...payloadB, key: 'pnew', code: ra.code, oldKey: 'pa' });
+    assert.equal(r.reused, true);
+    assert.equal(r.code, rb.code);
+    const { total } = await db.prepare('SELECT COUNT(*) AS total FROM short_links').first();
+    assert.equal(total, 1);
+    const gone = await db.prepare('SELECT * FROM short_links WHERE code = ?').bind(ra.code).first();
+    assert.equal(gone, null);
+});

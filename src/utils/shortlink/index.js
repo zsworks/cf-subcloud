@@ -82,7 +82,7 @@ export async function handleShortLink(request, env) {
         if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');
         const r = await saveLink(db, env, await request.json());
         if (r.notFound) return notFound('短链接不存在');
-        return jsonResponse({ success: true, code: r.code });
+        return jsonResponse({ success: true, code: r.code, reused: Boolean(r.reused), keyMatches: r.keyMatches !== false });
     }
     if (path === '/api/short/list' && request.method === 'GET') {
         if (!db) throw new Error('短链接功能未启用：未绑定 D1 数据库');

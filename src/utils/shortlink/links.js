@@ -1,6 +1,6 @@
 import { buildConfig } from '../env.js';
 import { handleRequest } from '../handler.js';
-import { getKeys, encryptBlob, decryptBlob, hmacB64url, timingSafeEqual, base64ToBytes } from './crypto.js';
+import { getKeys, encryptBlob, decryptBlob, hmacB64url, timingSafeEqual, base64ToBytes, md5Hex, canonicalStringify } from './crypto.js';
 import { getSource, refreshSource } from './sources.js';
 import { UA_MAP } from './ua.js';
 
@@ -14,11 +14,15 @@ const CREATE_SQL = `CREATE TABLE IF NOT EXISTS short_links (
         code TEXT PRIMARY KEY,
         blob TEXT NOT NULL,
         pw_hash TEXT NOT NULL,
-        created INTEGER NOT NULL
+        created INTEGER NOT NULL,
+        url_md5 TEXT
     )`;
+// 查重唯一索引：同内容订阅只存一行，SQLite 允许多个 NULL（存量旧行不受影响）
+const MD5_INDEX_SQL = 'CREATE UNIQUE INDEX IF NOT EXISTS idx_short_links_url_md5 ON short_links(url_md5)';
 
 const readyDbs = new WeakSet();
-// 惰性建表（按 db 实例记忆）；旧表（无 pw_hash 列）探测到即 DROP 重建（设计确认清空重建）
+// 惰性建表（按 db 实例记忆）；旧表探测迁移：缺 pw_hash 列 DROP 重建（设计确认清空重建），
+// 缺 url_md5 列 ALTER 补列后建唯一索引
 export async function ensureShortLinkTable(db) {
     if (readyDbs.has(db)) return;
     await db.prepare(CREATE_SQL).run();
@@ -28,6 +32,12 @@ export async function ensureShortLinkTable(db) {
         await db.prepare('DROP TABLE short_links').run();
         await db.prepare(CREATE_SQL).run();
     }
+    try {
+        await db.prepare('SELECT url_md5 FROM short_links LIMIT 1').first();
+    } catch {
+        await db.prepare('ALTER TABLE short_links ADD COLUMN url_md5 TEXT').run();
+    }
+    await db.prepare(MD5_INDEX_SQL).run();
     readyDbs.add(db);
 }
 
@@ -69,6 +79,21 @@ export async function saveLink(db, env, body = {}) {
         }
     }
 
+    // 内容查重键：规范化序列化（键序无关）后取 MD5；label/口令/缓存内容不参与，同配置即同一条
+    const urlMd5 = await md5Hex(canonicalStringify({ target, params, sources: srcIds, rawUrls: raws }));
+    const dup = await db.prepare('SELECT code, pw_hash FROM short_links WHERE url_md5 = ? LIMIT 1').bind(urlMd5).first();
+    if (dup?.code && dup.code !== code) {
+        // 更新成与其他行相同的内容：删除本行，复用既有短码
+        if (existingCode) {
+            await db.prepare('DELETE FROM short_links WHERE code = ?').bind(code).run();
+        }
+        return {
+            code: dup.code,
+            reused: true,
+            keyMatches: await verifyPw(dup.pw_hash, key, hmacKey),
+        };
+    }
+
     const blobObj = {
         version: 3,
         target,
@@ -78,13 +103,21 @@ export async function saveLink(db, env, body = {}) {
         label: typeof label === 'string' && label.trim() ? label.trim() : null,
     };
     const blob = await encryptBlob(blobObj, encKey);
-    await db
-        .prepare(
-            `INSERT INTO short_links (code, blob, pw_hash, created) VALUES (?, ?, ?, ?)
-             ON CONFLICT(code) DO UPDATE SET blob = excluded.blob, pw_hash = excluded.pw_hash`,
-        )
-        .bind(code, blob, await pwHash(key, hmacKey), Date.now())
-        .run();
+    try {
+        await db
+            .prepare(
+                `INSERT INTO short_links (code, blob, pw_hash, created, url_md5) VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(code) DO UPDATE SET blob = excluded.blob, pw_hash = excluded.pw_hash, url_md5 = excluded.url_md5`,
+            )
+            .bind(code, blob, await pwHash(key, hmacKey), Date.now(), urlMd5)
+            .run();
+    } catch (err) {
+        // 并发下唯一索引兜底：他人已插入同内容行，同样复用
+        if (!/UNIQUE/i.test(String(err?.message))) throw err;
+        const winner = await db.prepare('SELECT code, pw_hash FROM short_links WHERE url_md5 = ? LIMIT 1').bind(urlMd5).first();
+        if (!winner?.code) throw err;
+        return { code: winner.code, reused: true, keyMatches: await verifyPw(winner.pw_hash, key, hmacKey) };
+    }
     return { code };
 }
 

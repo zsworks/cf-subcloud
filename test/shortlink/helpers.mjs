@@ -1,11 +1,12 @@
 // 测试用内存 D1 mock，仅覆盖 shortlink 模块使用的 SQL 形态
-export function createMockD1({ legacy = false, legacySources = false } = {}) {
+export function createMockD1({ legacy = false, legacySources = false, noMd5 = false } = {}) {
     const state = {
         sub_sources: [],
         short_links: legacy ? [{ code: 'old00000', salt: 's', blob: 'b', created: 1 }] : [],
         legacy,
         legacySources,
         noCode: legacySources, // 旧表同时缺 code 列
+        noMd5, // 有 pw_hash 但缺 url_md5 列的中间版本旧表
     };
     const norm = (sql) => sql.replace(/\s+/g, ' ').trim();
     function exec(sql, args) {
@@ -15,6 +16,10 @@ export function createMockD1({ legacy = false, legacySources = false } = {}) {
         if (/^DROP TABLE short_links$/.test(s)) {
             state.short_links = [];
             state.legacy = false;
+            return null;
+        }
+        if (/^ALTER TABLE short_links ADD COLUMN url_md5 TEXT$/.test(s)) {
+            state.noMd5 = false;
             return null;
         }
         if (/^ALTER TABLE sub_sources ADD COLUMN ua TEXT NOT NULL DEFAULT 'v2ray'$/.test(s)) {
@@ -46,8 +51,8 @@ export function createMockD1({ legacy = false, legacySources = false } = {}) {
             return null;
         }
         if (/^INSERT INTO short_links/.test(s)) {
-            const [code, blob, pwHash, created] = args;
-            const row = { code, blob, pw_hash: pwHash, created };
+            const [code, blob, pwHash, created, urlMd5] = args;
+            const row = { code, blob, pw_hash: pwHash, created, url_md5: urlMd5 ?? null };
             const i = state.short_links.findIndex((r) => r.code === code);
             if (i >= 0) {
                 row.created = state.short_links[i].created;
@@ -59,11 +64,23 @@ export function createMockD1({ legacy = false, legacySources = false } = {}) {
             if (state.legacy) throw new Error('no such column: pw_hash');
             return state.short_links[0] || null;
         }
+        if (/^SELECT url_md5 FROM short_links LIMIT 1$/.test(s)) {
+            if (state.noMd5) throw new Error('no such column: url_md5');
+            return state.short_links[0] || null;
+        }
         if (/^SELECT \* FROM sub_sources WHERE id = \?$/.test(s)) {
             return state.sub_sources.find((r) => r.id === args[0]) || null;
         }
         if (/^SELECT \* FROM short_links WHERE code = \?$/.test(s)) {
             return state.short_links.find((r) => r.code === args[0]) || null;
+        }
+        if (/^SELECT code, pw_hash FROM short_links WHERE url_md5 = \? LIMIT 1$/.test(s)) {
+            const hit = state.short_links.find((r) => r.url_md5 === args[0]);
+            return hit ? { code: hit.code, pw_hash: hit.pw_hash } : null;
+        }
+        if (/^DELETE FROM short_links WHERE code = \?$/.test(s)) {
+            state.short_links = state.short_links.filter((r) => r.code !== args[0]);
+            return null;
         }
         if (/^SELECT id, name, code, fetched_at FROM sub_sources ORDER BY fetched_at DESC$/.test(s)) {
             return [...state.sub_sources].sort((a, b) => b.fetched_at - a.fetched_at).map((r) => ({ id: r.id, name: r.name, code: r.code ?? null, fetched_at: r.fetched_at }));

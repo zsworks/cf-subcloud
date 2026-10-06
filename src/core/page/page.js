@@ -957,13 +957,20 @@ function homePageHtml(e, configJson) {
                 if (!resp.ok || !data.success) {
                     throw new Error(typeof data === 'string' ? data : data.error || '保存失败');
                 }
+                if (data.reused && data.keyMatches === false) {
+                    // 同内容已存在但本次口令与原口令不同：复用短码，但原口令仍有效，不生成带错误口令的链接
+                    const bareUrl = \`\${window.location.origin}/s/\${data.code}\`;
+                    updateResultAndQR(bareUrl);
+                    showToast('✓ 订阅内容相同，已复用既有短码；访问口令仍为原保存口令，本次输入未生效', 'success');
+                    return;
+                }
                 editingCode = data.code;
                 editingLabel = label || '';
                 editingOldKey = key;
                 const shortUrl = \`\${window.location.origin}/s/\${data.code}?key=\${b64EncodeKey(key)}\`;
                 updateResultAndQR(shortUrl);
                 navigator.clipboard.writeText(shortUrl).then(() => {
-                    showToast('✓ 已加密保存，短链接（含访问口令）已复制', 'success');
+                    showToast(data.reused ? '✓ 订阅内容相同，已复用既有短链接（含访问口令）已复制' : '✓ 已加密保存，短链接（含访问口令）已复制', 'success');
                 }).catch(() => {
                     showToast('✓ 已加密保存，短链接已生成', 'success');
                 });
