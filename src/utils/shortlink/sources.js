@@ -114,7 +114,13 @@ export async function getSource(db, env, id) {
     const row = await db.prepare('SELECT * FROM sub_sources WHERE id = ?').bind(id).first();
     if (!row) return null;
     const { encKeys } = await getKeys(env);
-    const obj = await decryptBlob(row.blob, encKeys);
+    let obj;
+    try {
+        obj = await decryptBlob(row.blob, encKeys);
+    } catch {
+        // 密钥轮换后旧密文不可解：给出可行动的提示而非生硬的 WebCrypto 错误
+        throw new Error(`订阅源「${row.name}」解密失败：加密密钥已轮换，请重新保存该订阅源`);
+    }
     return { id: row.id, name: row.name, url: obj.url, content: obj.content, headers: obj.headers || {}, fetchedAt: row.fetched_at, ua: row.ua || DEFAULT_SOURCE_UA, code: row.code || null };
 }
 
